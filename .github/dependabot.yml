@@ -1,0 +1,12 @@
+version: 2
+updates:
+  # Third-party actions pinned by SHA in the workflows AND in every composite
+  # action.yml. Glob directories so a nested capability action is covered.
+  - package-ecosystem: github-actions
+    directories:
+      - /
+      - /actions/*
+      - /actions/capabilities/*
+    schedule:
+      interval: weekly
+    labels: [dependencies]
