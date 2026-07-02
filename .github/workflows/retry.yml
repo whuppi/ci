@@ -1,0 +1,39 @@
+# Reusable auto-retry — re-runs the failed jobs of a CI / Full Test run once.
+#
+# The test matrix is large and GitHub-hosted runners blip on infra every run
+# (DNS, cache reserve, emulator boot, apt). A single transient failure
+# shouldn't need a manual re-run. The caller carries the workflow_run trigger
+# (and its hardening ignore); this fires after a run completes, and if it
+# failed on its FIRST attempt, re-runs only the failed jobs. run_attempt == 1
+# means exactly one auto-retry — a genuine failure still fails on attempt 2, so
+# real breakage is never hidden, only infra blips absorbed.
+name: Auto-retry
+
+on:
+  workflow_call: {}
+
+permissions: {}
+
+jobs:
+  retry:
+    name: Re-run failed jobs
+    # Owner-guarded, and only when the run failed on its first attempt.
+    if: >-
+      github.repository_owner == 'whuppi' &&
+      github.event.workflow_run.conclusion == 'failure' &&
+      github.event.workflow_run.run_attempt == 1
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: write  # gh run rerun re-runs the failed jobs of the run
+    timeout-minutes: 5
+    steps:
+      - name: Re-run failed jobs
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          RUN_NAME: ${{ github.event.workflow_run.name }}
+          REPO: ${{ github.repository }}
+        run: |
+          echo "Re-running failed jobs of '$RUN_NAME' (run $RUN_ID, attempt 1)."
+          gh run rerun "$RUN_ID" --repo "$REPO" --failed

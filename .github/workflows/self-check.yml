@@ -1,0 +1,141 @@
+# whuppi/ci's own PR gate. Lints this repo's workflows + composite actions +
+# shell, checks the PR title, verifies the pinned assets are still reachable,
+# and guards the stamping rule: internal refs on main must say @main (a stamped
+# version tag leaking into main would freeze internals at an old release).
+name: Self Check
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  conventional-commit:
+    name: Conventional Commit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - name: Check PR title
+        shell: bash
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          types=$(paste -sd'|' tool/commit-types.txt)
+          if ! grep -qE "^(${types})(\(.+\))?!?: .+" <<< "$TITLE"; then
+            echo "::error::PR title must follow Conventional Commits format."
+            printf '  Types: %s\n' "$(paste -sd' ' tool/commit-types.txt)"
+            echo "  Your title: $TITLE"
+            exit 1
+          fi
+          echo "✓ PR title is valid: $TITLE"
+
+  workflow-lint:
+    name: Workflow lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - name: zizmor (security — workflows + composite actions)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          source tool/versions.env
+          pipx run "zizmor==$ZIZMOR_VERSION" --persona=auditor .github/ actions/
+      - name: actionlint (workflow correctness)
+        shell: bash
+        run: |
+          source tool/versions.env
+          go install "github.com/rhysd/actionlint/cmd/actionlint@v$ACTIONLINT_VERSION"
+          PATH="$(go env GOPATH)/bin:$PATH"
+          actionlint -color
+      - name: shell lint (portability)
+        shell: bash
+        run: bash tool/lint_shell.sh
+
+  action-yaml-parse:
+    name: Action YAML parse
+    # actionlint covers .github/workflows only; parse the composite action.yml
+    # files too so a malformed capability action fails the PR, not a consumer.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - name: Parse every action.yml
+        shell: bash
+        run: |
+          files=$(git ls-files 'actions/*/action.yml' 'actions/*/*/action.yml')
+          # shellcheck disable=SC2086
+          python3 -c 'import sys, yaml; [yaml.safe_load(open(f)) for f in sys.argv[1:]]; print("YAML parse OK (%d action files)" % (len(sys.argv) - 1))' $files
+
+  internal-refs-are-main:
+    name: Internal refs are @main
+    # The stamping guard: fail if any internal whuppi/ci reference on main
+    # carries a version tag. self-release stamps @main → the release tag in a
+    # detached commit; a stamped ref leaking back into main would freeze
+    # internals forever.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - name: No version-tagged internal refs on main
+        shell: bash
+        run: |
+          # Only real `uses:` keys, never a commented illustration (doc examples
+          # in an action header legitimately show a consumer the @vX.Y.Z pin).
+          bad=$(grep -rnE 'uses:[[:space:]]*whuppi/ci[^@[:space:]]*@' .github/workflows/ actions/ \
+            | grep -v '@main' \
+            | grep -vE '^[^:]+:[0-9]+:[[:space:]]*#' || true)
+          if [ -n "$bad" ]; then
+            printf '%s\n' "$bad"
+            echo "::error::internal whuppi/ci refs on main must be @main (self-release stamps tags)"
+            exit 1
+          fi
+          ref_bad=$(grep -rn -A3 'repository: whuppi/ci' .github/workflows/ \
+            | grep -E '[[:space:]]ref:' | grep -v 'ref: main' || true)
+          if [ -n "$ref_bad" ]; then
+            printf '%s\n' "$ref_bad"
+            echo "::error::checkout of whuppi/ci on main must use ref: main"
+            exit 1
+          fi
+          echo "✓ all internal whuppi/ci refs are @main"
+
+  pin-availability:
+    name: Pin availability
+    # HEADs every pinned asset so a pruned pin fails the PR, before it fails a
+    # consumer's build. (This job lived in the package's pr-checks; the pins
+    # live in whuppi/ci now, so the check does too.)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - name: Pinned assets still reachable
+        shell: bash
+        run: bash tool/ci/upgrade.sh check-availability

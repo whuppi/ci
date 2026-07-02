@@ -1,0 +1,150 @@
+# Reusable triage. On a new issue or PR: auto-label (changed files +
+# conventional title) and auto-assign; on PR push: revoke a stale
+# `ready-to-test`; on a dependabot push: post a recreate notice. REST API
+# throughout (fork-PR compatible); file-path labels via actions/labeler
+# reading the CONSUMER's .github/labeler.yml.
+#
+# PRIVILEGED. The caller carries the pull_request_target trigger and its
+# hardening ignore; every job here is written to the workflow-security
+# doctrine (no PR checkout, fork data env-only, no GITHUB_ENV writes,
+# least-privilege per-job tokens, owner-guarded).
+name: Triage
+
+on:
+  workflow_call:
+    inputs:
+      assignee:
+        type: string
+        required: false
+        default: 'chaudharydeepanshu'
+
+permissions: {}
+
+jobs:
+  # ── Auto-label by file path (actions/labeler) ──
+  label-by-files:
+    name: Label by changed files
+    # Owner-guard: a fork that enables Actions must never run this privileged
+    # workflow in its own context. Every job carries it.
+    if: github.repository_owner == 'whuppi' && github.event_name == 'pull_request_target'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read        # labeler reads .github/labeler.yml + the PR file list
+      pull-requests: write  # labeler applies matched labels to the PR
+    timeout-minutes: 5
+    steps:
+      - uses: actions/labeler@f27b608878404679385c85cfa523b85ccb86e213 # v6.1.0
+        with:
+          sync-labels: false
+
+  # ── Auto-label by PR title + branch ──
+  label-by-title:
+    name: Label by title
+    if: github.repository_owner == 'whuppi' && github.event_name == 'pull_request_target' && github.event.action == 'opened'
+    runs-on: ubuntu-24.04
+    permissions:
+      pull-requests: write  # adds labels to the PR
+    timeout-minutes: 5
+    steps:
+      - name: Label by conventional commit title
+        # Untrusted PR data (title, branch refs) flows through env:, never
+        # interpolated into run: — a fork controls these, and inline they
+        # would execute as shell.
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          TITLE: ${{ github.event.pull_request.title }}
+          HEAD: ${{ github.event.pull_request.head.ref }}
+          BASE: ${{ github.event.pull_request.base.ref }}
+        run: |
+          add_label() {
+            gh api "repos/$REPO/issues/$PR/labels" -f "labels[]=$1" --silent 2>/dev/null || true
+          }
+          if grep -qE '^fix(\(|!?:)' <<< "$TITLE"; then
+            add_label "bug"
+          elif grep -qE '^feat(\(|!?:)' <<< "$TITLE"; then
+            add_label "feature"
+          fi
+          if [[ "$HEAD" == "dev" && "$BASE" == "prod" ]]; then
+            add_label "release"
+          fi
+
+  # ── Auto-assign maintainer ──
+  assign:
+    name: Assign maintainer
+    if: github.repository_owner == 'whuppi'
+    runs-on: ubuntu-24.04
+    permissions:
+      issues: write         # assign on issue-opened events
+      pull-requests: write  # assign on PR events
+    timeout-minutes: 5
+    steps:
+      - name: Assign maintainer
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          EVENT_NAME: ${{ github.event_name }}
+          ISSUE_NUM: ${{ github.event.issue.number }}
+          PR_NUM: ${{ github.event.pull_request.number }}
+          ASSIGNEE: ${{ inputs.assignee }}
+        run: |
+          if [[ "$EVENT_NAME" == "issues" ]]; then
+            NUM="$ISSUE_NUM"
+          else
+            NUM="$PR_NUM"
+          fi
+          gh api "repos/$REPO/issues/$NUM/assignees" \
+            -f "assignees[]=$ASSIGNEE" --silent 2>/dev/null || true
+
+  # ── Revoke stale ready-to-test on new commits ──
+  revoke-ready-to-test:
+    name: Revoke ready-to-test
+    if: >-
+      github.repository_owner == 'whuppi' &&
+      github.event_name == 'pull_request_target' &&
+      github.event.action == 'synchronize' &&
+      contains(github.event.pull_request.labels.*.name, 'ready-to-test')
+    runs-on: ubuntu-24.04
+    permissions:
+      pull-requests: write  # removes the stale label and comments on the PR
+    timeout-minutes: 5
+    steps:
+      - name: Remove label + notify
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          gh api "repos/$REPO/issues/$PR/labels/ready-to-test" -X DELETE --silent 2>/dev/null || true
+          gh api "repos/$REPO/issues/$PR/comments" \
+            -f "body=Label \`ready-to-test\` removed — new commits pushed. Re-add when ready." \
+            --silent 2>/dev/null || true
+
+  # ── Dependabot recreate notice ──
+  dependabot-needs-recreate:
+    name: Dependabot recreate notice
+    if: >-
+      github.repository_owner == 'whuppi' &&
+      github.event_name == 'pull_request_target' &&
+      github.event.action == 'synchronize' &&
+      github.event.pull_request.user.login == 'dependabot[bot]' &&
+      github.event.sender.login != 'dependabot[bot]'
+    runs-on: ubuntu-24.04
+    permissions:
+      pull-requests: write  # comments on the PR
+    timeout-minutes: 5
+    steps:
+      - name: Notify maintainer
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          gh api "repos/$REPO/issues/$PR/comments" \
+            -f "body=New commits pushed — workflows may be outdated. A maintainer with push access should comment \`@dependabot recreate\` to pick up the latest changes." \
+            --silent 2>/dev/null || true

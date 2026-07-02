@@ -613,7 +613,7 @@ cmd_discover() {
   # `git: ref:` consumers can't fetch submodules through pub. No-op when the
   # package has no .gitmodules (every pure-Dart/Flutter package).
   if [ -f .gitmodules ]; then
-    local sub fs_path
+    local sub
     while IFS= read -r sub; do
       [ -n "$sub" ] || continue
       if [ -d "$sub/.git" ] || [ -f "$sub/.git" ]; then
