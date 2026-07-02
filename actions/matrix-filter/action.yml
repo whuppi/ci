@@ -1,0 +1,55 @@
+name: Matrix Filter
+description: >
+  Decide whether a full-test matrix row runs. Two gates: portability rows
+  (row-portability true) are skipped when the run's portability toggle is off,
+  and a name filter (a target like "android" or a type like "pkg") skips rows
+  whose name doesn't match. Consumers gate every later step on the `match`
+  output, so a skipped row completes green without provisioning anything.
+
+inputs:
+  name:
+    description: "The matrix row's display name (what the filter matches against)"
+    required: true
+  filter:
+    description: "Run filter: 'all' or a substring of the row name"
+    required: false
+    default: 'all'
+  portability:
+    description: "The run's portability toggle"
+    required: false
+    default: 'true'
+  row-portability:
+    description: "Whether this row is a portability row"
+    required: false
+    default: 'false'
+
+outputs:
+  match:
+    description: "'true' when the row should run"
+    value: ${{ steps.decide.outputs.match }}
+
+runs:
+  using: composite
+  steps:
+    - id: decide
+      shell: bash
+      env:
+        NAME: ${{ inputs.name }}
+        FILTER: ${{ inputs.filter }}
+        PORTABILITY: ${{ inputs.portability }}
+        ROW_PORTABILITY: ${{ inputs.row-portability }}
+      run: |
+        # Skip portability rows when portability is off
+        if [[ "$ROW_PORTABILITY" == "true" && "$PORTABILITY" != "true" ]]; then
+          echo "Skipped: portability off"
+          echo "match=false" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+        if [[ "$FILTER" == "all" || -z "$FILTER" ]]; then
+          echo "match=true" >> "$GITHUB_OUTPUT"
+        elif grep -qi "$FILTER" <<< "$NAME"; then
+          echo "match=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "Skipped by filter: $FILTER ∉ $NAME"
+          echo "match=false" >> "$GITHUB_OUTPUT"
+        fi

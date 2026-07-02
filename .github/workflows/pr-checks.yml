@@ -108,22 +108,18 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
           persist-credentials: false
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: Prerelease lane (CHANGELOG.pre.md)
+        uses: whuppi/ci/actions/release-tool@main
+        env:
+          BRANCH: dev
         with:
-          repository: whuppi/ci
-          ref: main
-          path: .whuppi-ci
-          persist-credentials: false
-      - name: One new version per lane
-        shell: bash
-        run: |
-          rc=0
-          echo "── prerelease lane (CHANGELOG.pre.md) ──"
-          BRANCH=dev  bash .whuppi-ci/tool/ci/release.sh --check-versions || rc=1
-          echo ""
-          echo "── stable lane (CHANGELOG.md) ──"
-          BRANCH=prod bash .whuppi-ci/tool/ci/release.sh --check-versions || rc=1
-          exit $rc
+          mode: --check-versions
+      - name: Stable lane (CHANGELOG.md)
+        uses: whuppi/ci/actions/release-tool@main
+        env:
+          BRANCH: prod
+        with:
+          mode: --check-versions
 
   # ── Workflow lint (zizmor + actionlint + shell) ──────────────────
   # zizmor = security (auditor persona, zero findings). actionlint =

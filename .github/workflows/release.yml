@@ -1,12 +1,15 @@
 # Reusable release pipeline for a pure-Dart/Flutter package: gate → discover →
-# git-install-note → publish. All release logic lives in
-# whuppi/ci/tool/ci/release.sh; this workflow only orchestrates jobs. No
-# compile/upload jobs — a package with no shipped binaries skips them (a
-# binary-shipping consumer adds its own compile job + --update-tag-hashes).
+# git-install-note → publish. All release logic lives in tool/ci/release.sh,
+# invoked through the release-tool action (which runs it from the action cache,
+# never from inside the consumer workspace). No compile/upload jobs — a package
+# with no shipped binaries skips them (a binary-shipping consumer authors its
+# own workflow around the same release-tool steps).
 #
 # The caller resolves the lane (dev/prod) and passes it as `branch`, carries
 # the trigger (changelog push + dispatch), and provides the pub.dev credential.
 # Publish waits on the branch-named GitHub environment approval.
+#
+# Internal refs say @main; self-release stamps them to the release tag.
 name: Release
 
 on:
@@ -46,25 +49,23 @@ jobs:
           fetch-depth: 0
           ref: ${{ inputs.branch }}
           persist-credentials: false
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-        with:
-          repository: whuppi/ci
-          ref: main   # stamped to the exact release tag by self-release.yml
-          path: .whuppi-ci
-          persist-credentials: false
       # Backstop: even if a faulty merge skipped the PR check, refuse to
       # release a lane whose changelog adds more than one new version.
       - name: Version sanity
+        uses: whuppi/ci/actions/release-tool@main
         env:
           BRANCH: ${{ inputs.branch }}
-        run: bash .whuppi-ci/tool/ci/release.sh --check-versions
+        with:
+          mode: --check-versions
       - name: Check changelog relevance
         id: check
+        uses: whuppi/ci/actions/release-tool@main
         env:
           BRANCH: ${{ inputs.branch }}
           BEFORE: ${{ github.event.before }}
           AFTER: ${{ github.sha }}
-        run: bash .whuppi-ci/tool/ci/release.sh --gate
+        with:
+          mode: --gate
 
   # ── Discover version + create release ────────────────────────────
   discover:
@@ -89,18 +90,14 @@ jobs:
           ref: ${{ inputs.branch }}
           submodules: recursive
           persist-credentials: false
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-        with:
-          repository: whuppi/ci
-          ref: main
-          path: .whuppi-ci
-          persist-credentials: false
       - name: Find + create release
         id: find
+        uses: whuppi/ci/actions/release-tool@main
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BRANCH: ${{ inputs.branch }}
-        run: bash .whuppi-ci/tool/ci/release.sh --discover
+        with:
+          mode: --discover
 
   # ── Append the git-tag install snippet ───────────────────────────
   git-install-note:
@@ -116,17 +113,13 @@ jobs:
         with:
           ref: ${{ needs.discover.outputs.tag }}
           persist-credentials: false
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-        with:
-          repository: whuppi/ci
-          ref: main
-          path: .whuppi-ci
-          persist-credentials: false
       - name: Add git install snippet
+        uses: whuppi/ci/actions/release-tool@main
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ needs.discover.outputs.tag }}
-        run: bash .whuppi-ci/tool/ci/release.sh --add-git-install "$TAG"
+        with:
+          mode: --add-git-install
+          tag: ${{ needs.discover.outputs.tag }}
 
   # ── Publish to pub.dev ───────────────────────────────────────────
   publish:
@@ -144,25 +137,18 @@ jobs:
           ref: ${{ needs.discover.outputs.tag }}
           fetch-depth: 0
           persist-credentials: false
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-        with:
-          repository: whuppi/ci
-          ref: main
-          path: .whuppi-ci
-          persist-credentials: false
       - uses: whuppi/ci/actions/capabilities/fvm@main
       - name: Build filtered changelog
+        uses: whuppi/ci/actions/release-tool@main
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ needs.discover.outputs.tag }}
-        run: bash .whuppi-ci/tool/ci/release.sh --stamp-changelog "$TAG"
+        with:
+          mode: --stamp-changelog
+          tag: ${{ needs.discover.outputs.tag }}
       - name: Flatten README banner for pub.dev
-        run: bash .whuppi-ci/tool/ci/release.sh --stamp-readme
-      - name: Drop the whuppi/ci checkout before packaging
-        # The tarball is built from the working tree; the .whuppi-ci checkout
-        # must not enter it. Remove it before the stamp commit so the packaged
-        # tree is exactly the consumer's own files.
-        run: rm -rf .whuppi-ci
+        uses: whuppi/ci/actions/release-tool@main
+        with:
+          mode: --stamp-readme
       - name: Ephemeral commit (clean git for pub publish)
         env:
           TAG: ${{ needs.discover.outputs.tag }}
@@ -179,14 +165,10 @@ jobs:
           printf '%s' "$PUB_CREDS" > "$HOME/.config/dart/pub-credentials.json"
       - run: fvm dart pub get --no-example
       - run: fvm dart pub publish --force
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-        with:
-          repository: whuppi/ci
-          ref: main
-          path: .whuppi-ci
-          persist-credentials: false
       - name: Add pub.dev install snippet
+        uses: whuppi/ci/actions/release-tool@main
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ needs.discover.outputs.tag }}
-        run: bash .whuppi-ci/tool/ci/release.sh --add-pub-install "$TAG"
+        with:
+          mode: --add-pub-install
+          tag: ${{ needs.discover.outputs.tag }}

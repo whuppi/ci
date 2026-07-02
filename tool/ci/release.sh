@@ -79,6 +79,9 @@ Usage: $0 <mode> [tag]
 
 Run from the consumer package root. Requires GITHUB_REPOSITORY (owner/repo)
 in the environment — CI sets it; export it yourself for a local dry run.
+A consumer may define extra asset hashes in tool/ci/release_hooks.sh
+(release_extra_asset_hashes → "name<TAB>sha256" lines) for assets the
+Release API carries no digest for.
 
 Modes:
   --gate                    Check if a push should trigger a release.
@@ -241,8 +244,30 @@ JQ
     echo "  $name ... ${digest:7:12}..." >&2
   done < <(gh api "repos/$REPO/releases/tags/$tag" --jq "$jq_filter" | sort)
 
+  # Optional consumer extension: tool/ci/release_hooks.sh (in the consumer
+  # repo, the CWD) may define release_extra_asset_hashes, printing one
+  # "asset_name<TAB>sha256" line per asset the Release API carries no digest
+  # for (e.g. hand-written web files hashed from the tag's tree). The hook
+  # runs inside this script, so lib.sh helpers (sha256_file, json_get) are
+  # available to it.
+  local extra_entries=""
+  if [ -f tool/ci/release_hooks.sh ]; then
+    # shellcheck source=/dev/null  # consumer-owned; not resolvable at lint time
+    source tool/ci/release_hooks.sh
+    if declare -F release_extra_asset_hashes >/dev/null; then
+      local ename ehash
+      while IFS=$'\t' read -r ename ehash; do
+        [ -z "$ename" ] && continue
+        printf '%s' "$ehash" | grep -qE '^[0-9a-f]{64}$' \
+          || { echo "::error::release_extra_asset_hashes produced a non-sha256 for $ename" >&2; return 1; }
+        extra_entries+="  '$ename': '$ehash',"$'\n'
+        echo "  $ename ... ${ehash:0:12}... (hook)" >&2
+      done < <(release_extra_asset_hashes)
+    fi
+  fi
+
   local all_entries
-  all_entries=$(printf '%s' "$release_entries" | sed '/^$/d')
+  all_entries=$(printf '%s\n%s' "$release_entries" "$extra_entries" | sed '/^$/d')
 
   if [ -z "$all_entries" ]; then
     echo "  ⚠ No assets to hash — skipping"
@@ -642,7 +667,10 @@ cmd_discover() {
 
   # ── Commit, push to staging, create the GitHub Release ──
   git_ci_identity
-  git add -A
+  # Exclude the whuppi/ci checkout the calling workflow made — it sits in the
+  # workspace as an untracked dir and must NEVER enter the stamped release
+  # tree (it would pollute `git: ref:` installs and the pub tarball).
+  git add -A -- ':(exclude).whuppi-ci'
   if git diff --cached --quiet; then
     echo "  Tree already stamped — skipping commit"
   else

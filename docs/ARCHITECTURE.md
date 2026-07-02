@@ -32,13 +32,16 @@ consumer checkout). Depth from an action file to the repo root:
 Each such `run:` block sets `CI_ROOT="$GITHUB_ACTION_PATH/../../.."` and sources
 `"$CI_ROOT/tool/versions.env"` / calls `"$CI_ROOT/tool/fetch_verified.sh"`.
 
-A reusable-workflow job that needs the `tool/` scripts checks whuppi/ci out to a
-fixed sibling path, `.whuppi-ci/`, and calls `bash .whuppi-ci/tool/…`. These two
-paths never cross: composite actions come from the action cache, reusable-
-workflow scripts come from the `.whuppi-ci` checkout. The one place it matters:
-`release.yml`'s publish job builds the pub.dev tarball from the working tree, so
-it runs `rm -rf .whuppi-ci` before the stamp commit — the packaged tree is
-exactly the consumer's own files.
+For running the shared release.sh, prefer the `release-tool` action over a
+workspace checkout, in every workflow — reusable AND consumer-authored. It runs
+the script from the action cache in the consumer's working directory, so (a)
+its ref is Dependabot-bumpable like any action (a checkout step's `with: ref:`
+is NOT), and (b) nothing shared sits in the workspace to leak into a stamped
+release tree or pub tarball. The remaining `.whuppi-ci/` checkout pattern is
+for reusable-workflow jobs that need MULTIPLE tool files at once (pr-checks'
+workflow-lint: versions.env + lint_shell + the commit-types fallback); as
+defense-in-depth, release.sh's discover excludes `.whuppi-ci` from the stamped
+tree even though nothing should put it there anymore.
 
 ## make-target — the orchestration contract
 
@@ -97,9 +100,15 @@ every whuppi repo can.
 
 Triggers, concurrency groups, test matrices, the Makefile, the `.github/`
 manifests (`labels.json`, `labeler.yml`, `actionlint.yaml`, `CODEOWNERS`,
-`dependabot.yml`), the Flutter SDK pin (`.fvmrc`), and the two-lane changelogs.
-whuppi/ci owns the jobs and the shared supply chain; the consumer owns what to
-run them on and what to run.
+`dependabot.yml`, `zizmor.yml`), the Flutter SDK pin (`.fvmrc`), the two-lane
+changelogs, and any genuinely package-specific machinery (a native build, its
+pins, its `release_hooks.sh`). whuppi/ci owns the jobs and the shared supply
+chain; the consumer owns what to run them on and what to run.
+
+The git hooks (`.githooks/`) and `tool/commit-types.txt` sit in each consumer
+for standalone-clone integrity but are NOT hand-maintained there — the
+canonical copies live in this repo (`hooks/`, `tool/commit-types.txt`) and the
+workspace's `stamp-hooks.sh` re-stamps every consumer when they change.
 
 ## The release surface
 

@@ -1,0 +1,37 @@
+name: Release Tool
+description: >
+  Run the shared release.sh (from this action's own whuppi/ci copy) in the
+  consumer's working directory. Preferred over checking whuppi/ci out into the
+  workspace: the ref is Dependabot-bumpable like any action, and the script
+  runs from the runner's action cache, so nothing shared can leak into the
+  consumer's stamped release tree or pub tarball.
+
+  Env contract (set on the calling step): BRANCH for --check-versions /
+  --gate / --discover; BEFORE + AFTER for --gate; GH_TOKEN for every mode
+  that talks to GitHub. GITHUB_REPOSITORY is set by the runner. A consumer
+  tool/ci/release_hooks.sh (resolved against the working directory) extends
+  asset hashing — see release.sh's header.
+
+inputs:
+  mode:
+    description: "release.sh mode (e.g. --gate, --discover, --stamp-changelog)"
+    required: true
+  tag:
+    description: "Tag argument for the modes that take one (e.g. v1.2.3)"
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        INPUTS_MODE: ${{ inputs.mode }}
+        INPUTS_TAG: ${{ inputs.tag }}
+      run: |
+        CI_ROOT="$GITHUB_ACTION_PATH/../.."
+        if [ -n "$INPUTS_TAG" ]; then
+          bash "$CI_ROOT/tool/ci/release.sh" "$INPUTS_MODE" "$INPUTS_TAG"
+        else
+          bash "$CI_ROOT/tool/ci/release.sh" "$INPUTS_MODE"
+        fi

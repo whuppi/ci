@@ -48,8 +48,11 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           gh auth setup-git
-          gh label create upgrade-pins --description "Auto: pinned version bump (review the change)" --color "1d76db" 2>/dev/null || true
-          EXISTING_PR=$(gh pr list --label upgrade-pins --state open --json number --jq '.[0].number // empty')
+          # Own label, distinct from any consumer-local `upgrade-pins` job —
+          # existing-PR detection is label-keyed, so shared and local upgrade
+          # PRs must never share a label.
+          gh label create upgrade-sdk --description "Flutter SDK bump, review the change (auto)" --color "1d76db" 2>/dev/null || true
+          EXISTING_PR=$(gh pr list --label upgrade-sdk --state open --json number --jq '.[0].number // empty')
           echo "existing_pr=$EXISTING_PR" >> "$GITHUB_OUTPUT"
           if [ -n "$EXISTING_PR" ]; then
             git fetch origin chore/flutter-sdk 2>/dev/null || true
@@ -110,7 +113,7 @@ jobs:
 
           if [ -z "$EXISTING_PR" ]; then
             gh pr create --base "$BASE" --head chore/flutter-sdk \
-              --title "chore: bump Flutter SDK" --label upgrade-pins --draft --body "$PR_BODY"
+              --title "chore: bump Flutter SDK" --label upgrade-sdk --draft --body "$PR_BODY"
           else
             gh pr edit "$EXISTING_PR" --title "chore: bump Flutter SDK" --body "$PR_BODY"
           fi
