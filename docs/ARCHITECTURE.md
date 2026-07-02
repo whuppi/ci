@@ -1,7 +1,8 @@
 # whuppi/ci — Architecture
 
 How the shared CI is put together. For the consumer-facing surface see the
-README; for the build record see `BUILD_SPEC.md`.
+README. (This repo was generalized from pdf_manipulator's battle-tested CI;
+that history lives in git, not in a doc.)
 
 ## Two consumption mechanisms
 
@@ -27,10 +28,12 @@ consumer checkout). Depth from an action file to the repo root:
 | Action file | Repo root |
 |---|---|
 | `actions/capabilities/<x>/action.yml` | `$GITHUB_ACTION_PATH/../../..` |
-| `actions/make-target/action.yml`, `actions/debug-ssh/action.yml` | `$GITHUB_ACTION_PATH/../..` |
+| `actions/debug-ssh/action.yml`, `actions/release-tool/action.yml` | `$GITHUB_ACTION_PATH/../..` |
 
-Each such `run:` block sets `CI_ROOT="$GITHUB_ACTION_PATH/../../.."` and sources
-`"$CI_ROOT/tool/versions.env"` / calls `"$CI_ROOT/tool/fetch_verified.sh"`.
+Each such `run:` block sets a `CI_ROOT` from that depth and sources
+`"$CI_ROOT/tool/versions.env"` / calls the tool scripts through it.
+(`make-target` and `matrix-filter` read no repo files — pure composition
+and pure logic respectively.)
 
 For running the shared release.sh, prefer the `release-tool` action over a
 workspace checkout, in every workflow — reusable AND consumer-authored. It runs
@@ -61,6 +64,10 @@ shutdown), so the watchdog kills the stuck teardown and a reconciler
 report plus the captured console, not the killed process's exit code. The report
 path is an input (`report-json`, default `test-results/int-android.json`) the
 consumer's make target must write to.
+
+A full-test matrix row gates itself with the `matrix-filter` action (portability
+toggle + name filter → a `match` output every later step checks), so a skipped
+row completes green without provisioning anything.
 
 ## The versioned-release model + the stamping rule
 
@@ -125,3 +132,24 @@ Cut a release by merging a PR to `main` whose `CHANGELOG.md` gains a new top
 heading; `self-release.yml` does the rest. Never hand-tag `main` — the tag must
 point at the stamped detached commit, not at `main` (whose internal refs still
 say `@main`).
+
+## First-push runbook
+
+The one-time sequence when this repo goes to GitHub:
+
+1. Create `whuppi/ci` → push `main`. The `self-release.yml` push run (or a
+   dispatch) cuts `v1.0.0` from the seeded changelog heading — never hand-tag.
+2. Org Actions access: if the repo is private, Settings → Actions → Access →
+   "Accessible from repositories in the whuppi organization" (public needs
+   nothing).
+3. Per consumer: create dev/prod GitHub environments (prod with required
+   reviewers) + the `PUB_CREDENTIALS` secret per environment; apply the
+   repo-setup branch protection with the new required checks (`CI Gate`,
+   `Full Test Gate`, the pr-checks job names); run the labels workflow once
+   via dispatch.
+
+Steady-state upgrade flow: merge a changelog PR here → self-release cuts
+`vX.Y.Z` → each consumer's Dependabot opens ONE grouped PR bumping every
+whuppi/ci pin → that PR's fast gate runs automatically; add `ready-to-test`
+for the full matrix when the release touches test-path behavior → merge when
+green. Consumers upgrade independently; old pins work forever.

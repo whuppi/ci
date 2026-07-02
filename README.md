@@ -7,6 +7,9 @@ Shared CI for whuppi's Flutter/Dart package repos. Three things live here:
 - **Composite actions** — `make-target` provisions capabilities (Chrome, an
   emulator, an Xcode cache…) and runs a Makefile target, so the Makefile stays
   the single source of truth for what CI runs, the same locally and in CI.
+  Plus `release-tool` (run the shared release script, Dependabot-bumpable),
+  `matrix-filter` (full-test row gating), and `debug-ssh` (bore tunnel into
+  any runner).
 - **A pinned-tool supply chain** — `tool/versions.env` pins fvm, Chrome, bore,
   zizmor, and actionlint; every binary is sha256-verified through
   `tool/fetch_verified.sh` before it runs.
@@ -38,8 +41,7 @@ concurrency:
 jobs:
   checks:
     permissions:
-      contents: read
-      pull-requests: write
+      contents: read  # grant the union of the callee jobs' permissions
     uses: whuppi/ci/.github/workflows/pr-checks.yml@v1.0.0
 ```
 
@@ -101,7 +103,5 @@ asset.
 
 ## Docs
 
-- `docs/ARCHITECTURE.md` — how consumption, the stamping rule, and the release
-  model fit together.
-- `docs/BUILD_SPEC.md` — the build record: how this repo was generalized from
-  the reference package's CI.
+- `docs/ARCHITECTURE.md` — how consumption, the stamping rule, the release
+  model, and the first-push runbook fit together.
