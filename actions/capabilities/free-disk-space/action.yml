@@ -1,9 +1,9 @@
 name: Free Disk Space
 description: >
-  Reclaim disk so the build-heavy vendored-engine cargo test can link.
-  Linux: deletes the preinstalled SDKs the build never uses (~25 GB) — a
-  stock runner's ~14 GB free overruns mid-link (rust-lld SIGBUS / "no
-  space left on device"). macOS/Windows: no-op (ample headroom).
+  Reclaim disk for build-heavy jobs that overrun a stock runner's ~14 GB
+  free (large native builds, parallel linkers). Linux: deletes the
+  preinstalled SDKs the build never uses (~25 GB). macOS/Windows: no-op
+  (ample headroom).
 
 runs:
   using: composite
@@ -17,18 +17,17 @@ runs:
       if: runner.os == 'Linux'
       uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be # v1.3.1
       with:
-        # Keep the hosted tool cache: the rust capability installs sccache
-        # there (the build's RUSTC_WRAPPER) before this step runs, and
-        # deleting it breaks every cargo invocation that follows.
+        # Keep the hosted tool cache: capabilities may install tools there
+        # (a compiler wrapper, an SDK) before this step runs, and deleting it
+        # breaks every build invocation that follows.
         tool-cache: false
         android: true
         dotnet: true
         haskell: true
         large-packages: true
         docker-images: true
-        # Never set true: rust-lld leans on the 4 GB swapfile under
-        # parallel link, so removing it trades a disk-full failure for a
-        # silent OOM-SIGBUS.
+        # Never set true: parallel linkers lean on the 4 GB swapfile, so
+        # removing it trades a disk-full failure for a silent OOM-SIGBUS.
         swap-storage: false
 
     - name: df -h after

@@ -4,7 +4,7 @@ description: >
   fvm install to get the SDK from .fvmrc. Works on Linux, macOS, AND Windows.
   Downloads the pre-built binary directly — no dart pub global activate
   (avoids PATH issues on Windows Git Bash). Version + per-platform sha256
-  live in tool/versions.env.
+  live in this repo's tool/versions.env, read via GITHUB_ACTION_PATH.
 
 runs:
   using: composite
@@ -27,8 +27,13 @@ runs:
       run: |
         set -euo pipefail
 
+        # This action's files live in the whuppi/ci checkout, not the consumer
+        # workspace. GITHUB_ACTION_PATH points at actions/capabilities/fvm/;
+        # the repo root is three levels up.
+        CI_ROOT="$GITHUB_ACTION_PATH/../../.."
+
         # Pinned version + per-platform sha256, single source of truth.
-        source tool/versions.env
+        source "$CI_ROOT/tool/versions.env"
 
         # ── Detect OS + arch ───────────────────────────────────────────
         case "$(uname -s)" in
@@ -61,12 +66,12 @@ runs:
         base="https://github.com/leoafarias/fvm/releases/download/$FVM_VERSION"
 
         if [[ "$OS" == "windows" ]]; then
-          bash tool/fetch_verified.sh \
+          bash "$CI_ROOT/tool/fetch_verified.sh" \
             "$base/fvm-$FVM_VERSION-$OS-$ARCH.zip" "$EXPECTED" "$RUNNER_TEMP/fvm.zip"
           unzip -qo "$RUNNER_TEMP/fvm.zip" -d "$INSTALL_DIR"
           rm -f "$RUNNER_TEMP/fvm.zip"
         else
-          bash tool/fetch_verified.sh \
+          bash "$CI_ROOT/tool/fetch_verified.sh" \
             "$base/fvm-$FVM_VERSION-$OS-$ARCH.tar.gz" "$EXPECTED" "$RUNNER_TEMP/fvm.tar.gz"
           tar xzf "$RUNNER_TEMP/fvm.tar.gz" -C "$INSTALL_DIR"
           rm -f "$RUNNER_TEMP/fvm.tar.gz"

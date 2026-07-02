@@ -41,6 +41,10 @@ inputs:
     description: "Force cold boot even when snapshot cache exists"
     required: false
     default: 'false'
+  report-json:
+    description: "Machine JSON test report the reconciler reads (workspace-relative)"
+    required: false
+    default: 'test-results/int-android.json'
 
 runs:
   using: composite
@@ -237,10 +241,21 @@ runs:
         echo ""
         echo "raw command exit was $EXIT (ignored — reconciling from the JSON report)"
         WS="${GITHUB_WORKSPACE:-.}"
-        bash "$WS/tool/ci/reconcile_test_json.sh" "$WS/test-results/int-android.json" "$OUT"
+        bash "__CI_TOOL_DIR__/reconcile_test_json.sh" "$WS/__REPORT_JSON__" "$OUT"
         exit $?
         EMUSCRIPT
         chmod +x /tmp/emulator-run.sh
+
+        # The heredoc above is single-quoted, so __CI_TOOL_DIR__ / __REPORT_JSON__
+        # stayed literal. Substitute them here, where GITHUB_ACTION_PATH points at
+        # THIS action (its reconcile_test_json.sh lives three levels up in the
+        # whuppi/ci checkout) and INPUTS_REPORT_JSON is the consumer's report path.
+        sed -i.bak \
+          -e "s|__CI_TOOL_DIR__|$GITHUB_ACTION_PATH/../../../tool/ci|" \
+          -e "s|__REPORT_JSON__|$INPUTS_REPORT_JSON|" \
+          /tmp/emulator-run.sh && rm -f /tmp/emulator-run.sh.bak
+      env:
+        INPUTS_REPORT_JSON: ${{ inputs.report-json }}
 
     # ── Boot + run ──
     # -no-snapshot-save: warm-boot from cached snapshot, don't save

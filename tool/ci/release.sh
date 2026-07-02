@@ -20,25 +20,25 @@
 #   --add-git-install    Append the git-install snippet to release notes.
 #   --add-pub-install    Append the pub.dev-install snippet to notes.
 #
-# (Tree stamping — version bump, submodule de-registration, vendor
-# source — happens inside --discover; it is not a separate mode.)
+# (Tree stamping — version bump + generic submodule de-registration —
+# happens inside --discover; it is not a separate mode.)
 #
-# Pipeline flow (matches the workflow jobs)
+# Pipeline flow (matches the reusable release.yml jobs)
 # ─────────────────────────────────────────
 #   1. gate      → --gate            should this push trigger anything?
 #   2. discover  → --discover        find version, stamp tag, create release
-#   3. compile   → (workflow)        checkout tag, build per target
-#   4. upload    → (workflow)        upload binaries
-#                  --add-git-install
-#                  --update-tag-hashes
-#   5. publish   → --stamp-changelog
+#   3. git-note  → --add-git-install append the git-tag install snippet
+#   4. publish   → --stamp-changelog
 #                  --stamp-readme
 #                  dart pub publish
 #                  --add-pub-install
 #
-# After step 4 the tag carries: stamped version + raw vendor source +
-# asset hashes. Anyone using `git: ref: <tag>` in their pubspec gets a
-# working build with verified binaries.
+# Binary-shipping consumers add their own compile/upload jobs + the
+# --update-tag-hashes mode; a pure-Dart/Flutter package skips them.
+#
+# The stamped tag carries the version bump and, for a package with
+# submodules, their raw source de-registered so a `git: ref: <tag>`
+# consumer gets a self-contained checkout.
 #
 # Idempotency: every mode is safe to rerun. Existing releases are
 # skipped, duplicate snippets are detected, unchanged hashes do not
@@ -62,16 +62,23 @@ VERSION="${TAG:+${TAG#v}}"
 
 # lib.sh is shared with the build scripts in tool/ — one level up from tool/ci/.
 source "$SCRIPT_DIR/../lib.sh"
-ensure_jq  # this script parses pub.dev + build.json JSON via jq
+ensure_jq  # this script parses pub.dev JSON via jq
 
-REPO="${GITHUB_REPOSITORY:-$(json_get '.repo')}"
+# The consumer package is the CURRENT WORKING DIRECTORY; this script lives in
+# the whuppi/ci checkout. Identity comes from the environment + the pubspec.
+# For a local dry run, export GITHUB_REPOSITORY yourself (owner/repo).
+REPO="${GITHUB_REPOSITORY:?release.sh requires GITHUB_REPOSITORY (owner/repo)}"
 REPO_URL="https://github.com/$REPO"
-PKG_NAME="pdf_manipulator"
+PKG_NAME="$(sed -n 's/^name:[[:space:]]*//p' pubspec.yaml | head -1)"
+[ -n "$PKG_NAME" ] || { echo "::error::no 'name:' in pubspec.yaml — run from the package root" >&2; exit 1; }
 
 
 usage() {
   cat <<EOF
 Usage: $0 <mode> [tag]
+
+Run from the consumer package root. Requires GITHUB_REPOSITORY (owner/repo)
+in the environment — CI sets it; export it yourself for a local dry run.
 
 Modes:
   --gate                    Check if a push should trigger a release.
@@ -185,9 +192,12 @@ stamp_version() {
   local ver="$1"
   sed -i.bak "s/^version: .*/version: $ver/" pubspec.yaml && rm -f pubspec.yaml.bak
   echo "  pubspec.yaml → $ver"
-  sed -i.bak "s/const packageVersion = '[^']*'/const packageVersion = '$ver'/" \
-    lib/src/version.dart && rm -f lib/src/version.dart.bak
-  echo "  version.dart → $ver"
+  # Not every package carries the version constant — stamp it only if present.
+  if [ -f lib/src/version.dart ]; then
+    sed -i.bak "s/const packageVersion = '[^']*'/const packageVersion = '$ver'/" \
+      lib/src/version.dart && rm -f lib/src/version.dart.bak
+    echo "  version.dart → $ver"
+  fi
   sed -i.bak "s/  ${PKG_NAME}:.*/  ${PKG_NAME}: ^$ver/" README.md && rm -f README.md.bak
   sed -i.bak "s/${PKG_NAME}: X\.Y\.Z/${PKG_NAME}: $ver/" README.md && rm -f README.md.bak
   echo "  README.md → $ver"
@@ -201,6 +211,7 @@ stamp_asset_hashes() {
   local tag="$1"
   local hash_file="lib/src/hook/asset_hashes.dart"
 
+  [ -f "$hash_file" ] || { echo "  no $hash_file — nothing to stamp"; return 1; }
   if ! command -v gh &>/dev/null; then
     echo "  ⚠ gh CLI not found — skipping asset hashes"
     return 1
@@ -230,30 +241,8 @@ JQ
     echo "  $name ... ${digest:7:12}..." >&2
   done < <(gh api "repos/$REPO/releases/tags/$tag" --jq "$jq_filter" | sort)
 
-  # Hand-written web assets — hash from the tag's web_assets/ directory.
-  # Reads local filenames + asset names from build.json, skipping
-  # wasmBuildOutputs (those get hashes from the Release API above).
-  local web_entries=""
-  while IFS=$'\t' read -r local_name asset_name; do
-    local src="web_assets/$local_name"
-    if [ -f "$src" ]; then
-      local hash
-      hash=$(sha256_file "$src")
-      web_entries+="  '$asset_name': '$hash',"$'\n'
-      echo "  $asset_name ... ${hash:0:12}..." >&2
-    fi
-  done < <(
-    # Read web assets from build.json, skipping the wasmBuildOutputs.
-    wasm_outputs=$(jq -r '.wasmBuildOutputs | join(" ")' build.json)
-    jq -r '.web | to_entries[] | "\(.key)\t\(.value)"' build.json \
-      | while IFS=$'\t' read -r local_name asset_name; do
-          grep -qw "$local_name" <<< "$wasm_outputs" && continue
-          echo "$local_name	$asset_name"
-        done
-  )
-
   local all_entries
-  all_entries=$(printf '%s\n%s' "$release_entries" "$web_entries" | sed '/^$/d')
+  all_entries=$(printf '%s' "$release_entries" | sed '/^$/d')
 
   if [ -z "$all_entries" ]; then
     echo "  ⚠ No assets to hash — skipping"
@@ -616,36 +605,39 @@ cmd_discover() {
     return 0
   fi
 
-  # ── Stamp the tree: version + de-register submodules + false_secrets ──
+  # ── Stamp the tree: version + de-register any submodules ──
   echo "=== Stamping tag tree for $tag ==="
   stamp_version "$version"
 
-  local sub
-  for sub in vendor/pdf_oxide vendor/office_oxide; do
-    if [ -d "$sub/.git" ] || [ -f "$sub/.git" ]; then
-      git rm --cached "$sub" 2>/dev/null || true
-      rm -rf "$sub/.git"
-      git add --force "$sub/"
-      echo "  $sub → raw source (de-registered submodule)"
-    fi
-  done
-
+  # De-register every submodule so the tag is self-contained raw source —
+  # `git: ref:` consumers can't fetch submodules through pub. No-op when the
+  # package has no .gitmodules (every pure-Dart/Flutter package).
   if [ -f .gitmodules ]; then
+    local sub fs_path
+    while IFS= read -r sub; do
+      [ -n "$sub" ] || continue
+      if [ -d "$sub/.git" ] || [ -f "$sub/.git" ]; then
+        git rm --cached "$sub" 2>/dev/null || true
+        rm -rf "$sub/.git"
+        git add --force "$sub/"
+        echo "  $sub → raw source (de-registered submodule)"
+      fi
+      # Vendored source trips pub's secret scanner on upstream test fixtures.
+      if ! grep -qF "  - /$sub/**" pubspec.yaml; then
+        if grep -q '^false_secrets:' pubspec.yaml; then
+          fs_path="/$sub/**" awk '/^false_secrets:/{print; print "  - " ENVIRON["fs_path"]; next} 1' \
+            pubspec.yaml > pubspec.yaml.tmp
+        else
+          { cat pubspec.yaml; printf 'false_secrets:\n  - /%s/**\n' "$sub"; } > pubspec.yaml.tmp
+        fi
+        mv pubspec.yaml.tmp pubspec.yaml
+        echo "  pubspec.yaml += false_secrets /$sub/**"
+      fi
+    done < <(git config -f .gitmodules --get-regexp '^submodule\..*\.path$' | awk '{print $2}')
+
     git rm --cached .gitmodules 2>/dev/null || true
     rm -f .gitmodules
     echo "  .gitmodules removed"
-  fi
-
-  if ! grep -q '^  - /vendor/\*\*$' pubspec.yaml; then
-    if grep -q '^false_secrets:' pubspec.yaml; then
-      awk '/^false_secrets:/{print; print "  - /vendor/**"; next} 1' pubspec.yaml > pubspec.yaml.tmp
-    else
-      { cat pubspec.yaml; printf 'false_secrets:\n  - /vendor/**\n'; } > pubspec.yaml.tmp
-    fi
-    mv pubspec.yaml.tmp pubspec.yaml
-    grep -q '^  - /vendor/\*\*$' pubspec.yaml \
-      || { echo "::error::failed to add false_secrets /vendor/** to pubspec.yaml"; exit 1; }
-    echo "  pubspec.yaml += false_secrets /vendor/**"
   fi
 
   # ── Commit, push to staging, create the GitHub Release ──
