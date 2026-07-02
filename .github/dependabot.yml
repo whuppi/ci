@@ -10,3 +10,7 @@ updates:
     schedule:
       interval: weekly
     labels: [dependencies]
+    # Let a brand-new release sit a week before adopting it — a compromised
+    # third-party action gets scrutiny before it reaches a build.
+    cooldown:
+      default-days: 7

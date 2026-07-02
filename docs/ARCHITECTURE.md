@@ -79,6 +79,13 @@ rewrites every `@main` → `@vX.Y.Z` and every stamp-marked `ref: main` →
 fails any PR that hand-writes a version tag into an internal ref, so a stamped
 ref can't leak back onto `main` and freeze internals at an old release.
 
+Because these first-party refs are `@main`/`@vX.Y.Z` rather than SHA-pinned,
+zizmor's blanket `unpinned-uses` policy would reject them. `.github/zizmor.yml`
+sets a `ref-pin` policy for `whuppi/ci/*` only — the tag/branch ref is the pin,
+and the stamping makes it exact at release. Every third-party action still
+requires a SHA. Consumers carry the same one-line config so their own
+`@vX.Y.Z` pins pass the same gate.
+
 ## The repo guard
 
 Privileged reusable workflows (triage, retry, labels) guard on
