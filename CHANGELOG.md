@@ -4,6 +4,17 @@ Releases are cut from the top heading here by `self-release.yml`; consumers pin
 an exact version and upgrade through grouped Dependabot PRs. Versioning rules
 live in the README. Newest first.
 
+## 1.0.4
+
+Supply-chain pin bump — no change to the caller / Makefile contract, so
+consumers get a no-op Dependabot bump:
+
+- Chrome-for-Testing bumped `150.0.7871.24` → `150.0.7871.46` (Chrome's ~4-week
+  Stable cadence); the Chrome + ChromeDriver sha256s across Linux/macOS/Windows
+  were recomputed and re-verified. Chrome's CDN prunes old versions, so a stale
+  pin eventually 404s the download — keeping it fresh keeps the `chrome`
+  capability working for every consumer.
+
 ## 1.0.3
 
 Internal only — no change to the caller / Makefile contract, so consumers get
