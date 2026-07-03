@@ -52,14 +52,14 @@ jobs:
       # Backstop: even if a faulty merge skipped the PR check, refuse to
       # release a lane whose changelog adds more than one new version.
       - name: Version sanity
-        uses: whuppi/ci/actions/release-tool@main
+        uses: whuppi/ci/actions/release-tool@v1.0.1
         env:
           BRANCH: ${{ inputs.branch }}
         with:
           mode: --check-versions
       - name: Check changelog relevance
         id: check
-        uses: whuppi/ci/actions/release-tool@main
+        uses: whuppi/ci/actions/release-tool@v1.0.1
         env:
           BRANCH: ${{ inputs.branch }}
           BEFORE: ${{ github.event.before }}
@@ -92,7 +92,7 @@ jobs:
           persist-credentials: false
       - name: Find + create release
         id: find
-        uses: whuppi/ci/actions/release-tool@main
+        uses: whuppi/ci/actions/release-tool@v1.0.1
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BRANCH: ${{ inputs.branch }}
@@ -114,7 +114,7 @@ jobs:
           ref: ${{ needs.discover.outputs.tag }}
           persist-credentials: false
       - name: Add git install snippet
-        uses: whuppi/ci/actions/release-tool@main
+        uses: whuppi/ci/actions/release-tool@v1.0.1
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -137,16 +137,16 @@ jobs:
           ref: ${{ needs.discover.outputs.tag }}
           fetch-depth: 0
           persist-credentials: false
-      - uses: whuppi/ci/actions/capabilities/fvm@main
+      - uses: whuppi/ci/actions/capabilities/fvm@v1.0.1
       - name: Build filtered changelog
-        uses: whuppi/ci/actions/release-tool@main
+        uses: whuppi/ci/actions/release-tool@v1.0.1
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           mode: --stamp-changelog
           tag: ${{ needs.discover.outputs.tag }}
       - name: Flatten README banner for pub.dev
-        uses: whuppi/ci/actions/release-tool@main
+        uses: whuppi/ci/actions/release-tool@v1.0.1
         with:
           mode: --stamp-readme
       - name: Ephemeral commit (clean git for pub publish)
@@ -166,7 +166,7 @@ jobs:
       - run: fvm dart pub get --no-example
       - run: fvm dart pub publish --force
       - name: Add pub.dev install snippet
-        uses: whuppi/ci/actions/release-tool@main
+        uses: whuppi/ci/actions/release-tool@v1.0.1
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
