@@ -15,7 +15,10 @@ rust/wasm machinery local). Copy from device_io unless you ship binaries.
    triage, auto-close, labels, retry, upgrade-check, release, plus a
    debug-ssh dispatch workflow. Each owns its triggers + concurrency, grants
    the union of the callee jobs' permissions, and pins
-   `whuppi/ci/...@vX.Y.Z` (current release, exact — never `@main`).
+   `whuppi/ci/...@vX.Y.Z` (current release, exact — never `@main`). Pass
+   `auto-close`'s `maintainers-mention` your repo's maintainer TEAM slug
+   (`@whuppi/<repo>-maintainers`, the same team CODEOWNERS names), not a
+   person — so a maintainer change is one org edit, not a per-repo one.
 2. **Own workflows** — `ci.yml` (fast PR gate: jobs = make targets via
    `make-target`) and `full-test.yml` (label-triggered matrix; rows gate
    through `matrix-filter`). The Makefile is the contract: CI runs nothing a

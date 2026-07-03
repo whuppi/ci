@@ -17,6 +17,12 @@ on:
         required: false
         default: 'ubuntu-24.04'
       maintainers-mention:
+        # Who gets @-mentioned when someone opts an issue out of auto-close.
+        # Pass your repo's maintainer TEAM slug (e.g. '@whuppi/foo-maintainers')
+        # so membership is managed once in the org, not edited per-repo on every
+        # maintainer change — same team CODEOWNERS uses. Append a stable bot
+        # (e.g. '@whuppi/foo-maintainers @slopfairy') only for a fixed
+        # automation, not for humans.
         type: string
         required: false
         default: '@chaudharydeepanshu'
