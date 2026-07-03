@@ -1,8 +1,8 @@
 # Updating whuppi/ci
 
 Maintenance recipes. For how the pieces fit together see
-[`ARCHITECTURE.md`](ARCHITECTURE.md); for consumer onboarding and
-major-version migration see [`MIGRATION.md`](MIGRATION.md).
+[`ARCHITECTURE.md`](ARCHITECTURE.md) — its first-push runbook covers
+consumer onboarding.
 
 ---
 
@@ -35,8 +35,8 @@ and releasing are separate, deliberate steps.
 Inputs, secrets, and job/step contracts ARE the compatibility surface.
 Renaming/removing an input, changing a default that alters behavior, or
 renaming a gate job consumers list in branch protection = **MAJOR** release +
-a migration note in [`MIGRATION.md`](MIGRATION.md). Adding an optional input
-with a safe default = MINOR.
+a CHANGELOG entry spelling out what consumers must change. Adding an optional
+input with a safe default = MINOR.
 
 ## Editing the shared release script
 
