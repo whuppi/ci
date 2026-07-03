@@ -1,8 +1,8 @@
 # Updating whuppi/ci
 
 Maintenance recipes. For how the pieces fit together see
-[`ARCHITECTURE.md`](ARCHITECTURE.md); for consumer onboarding and
-major-version migration see [`MIGRATION.md`](MIGRATION.md).
+[`ARCHITECTURE.md`](ARCHITECTURE.md) — its first-push runbook covers
+consumer onboarding.
 
 ---
 
@@ -35,8 +35,8 @@ and releasing are separate, deliberate steps.
 Inputs, secrets, and job/step contracts ARE the compatibility surface.
 Renaming/removing an input, changing a default that alters behavior, or
 renaming a gate job consumers list in branch protection = **MAJOR** release +
-a migration note in [`MIGRATION.md`](MIGRATION.md). Adding an optional input
-with a safe default = MINOR.
+a CHANGELOG entry spelling out what consumers must change. Adding an optional
+input with a safe default = MINOR.
 
 ## Editing the shared release script
 
@@ -76,7 +76,8 @@ is required. Stored via the deploy tooling:
 
 1. Merge a PR to `main` adding a new top heading to `CHANGELOG.md`
    (MAJOR/MINOR/PATCH per the README's rules) with a short summary.
-2. `self-release.yml` fires on the changelog push: it stamps every internal
+2. `self-release.yml` fires on the changelog push: it runs the shared
+   `tool/ci/release.sh`, whose `release_stamp_tree` hook stamps every internal
    `@main` → `@vX.Y.Z` in a detached commit, tags it, creates the release.
    `main` never carries the stamp.
 3. Consumers' Dependabot opens one grouped PR each (after its cooldown); their

@@ -1,0 +1,65 @@
+# slopfairy config for whuppi/ci — the shared CI repo (reusable workflows,
+# composite actions, pinned tool supply chain). Overrides defaults; missing
+# keys use built-in behavior.
+
+reviews:
+  auto_review: true
+  focus_areas:
+    - correctness
+    - workflow-security
+    - supply-chain
+  ignore_paths: []
+  path_instructions:
+    - path: ".github/workflows/**"
+      instructions: >
+        Reusable workflows every whuppi package executes. Flag:
+        pull_request_target that checks out or runs PR-head code; untrusted
+        github.event.* (PR title, branch ref, comment body) interpolated into a
+        run: block instead of passed via env:; any external action not pinned to
+        a full commit SHA; GITHUB_TOKEN permissions wider than the job needs;
+        secrets read outside an environment: gate. Internal whuppi/ci refs on
+        main must be @main (the release stamps them) — flag a hand-written @vN.
+    - path: "actions/**"
+      instructions: >
+        Composite actions run on consumers' runners across Linux/macOS/Windows.
+        Check shell safety (set -euo pipefail, quoted expansions), bash 3.2
+        portability (macOS ships 3.2 — no case-modification expansions, no
+        mapfile, no associative arrays), and that GITHUB_PATH / GITHUB_ENV
+        writes are static literals, never interpolated (newline-injection
+        surface).
+    - path: "tool/**"
+      instructions: >
+        Supply chain. versions.env holds pinned sha256s; fetch_verified.sh is
+        the fail-closed download gate; the shared release.sh + this repo's
+        release_stamp_tree hook (release_hooks.sh) do release stamping. A
+        change that weakens hash verification, floats a pin, or lets the stamp
+        leak an unpinned ref is a supply-chain risk — flag it.
+    - path: "hooks/**"
+      instructions: >
+        Canonical git hooks stamped into every consumer. They must not execute
+        untrusted input and must stay bash-3.2 portable.
+
+triage:
+  auto_label: true
+  auto_assign: false
+
+personality:
+  tone: professional
+  extra_instructions: |
+    whuppi/ci is the shared CI foundation every whuppi Flutter/Dart package
+    depends on to build and release. A bug here breaks every consumer, so weigh
+    workflow-security and supply-chain issues heaviest — this repo is the trust
+    root for everything downstream.
+
+    Key facts:
+    - Reusable workflows + composite actions (make-target + capabilities,
+      release-tool, matrix-filter, debug-ssh), consumed cross-repo and pinned to
+      an exact tag by each consumer.
+    - Pinned, sha256-verified tool supply chain (tool/versions.env) with a daily
+      upgrade radar (self-upgrade.yml).
+    - Versioned releases via internal-ref stamping (the release_stamp_tree hook
+      in tool/ci/release_hooks.sh, run by the shared release.sh): main
+      carries @main refs; a release stamps them to the exact tag in a detached
+      commit, self-verifying that no @main / ref: main leaks. self-check.yml
+      guards that main only ever carries @main.
+    - Conventional commits enforced.

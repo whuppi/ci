@@ -1,0 +1,53 @@
+name: Bug report
+description: A shared-CI workflow or action is misbehaving
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      placeholder: Describe the bug. Include the error message or the failing step's log if you have it.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Which piece?
+      options:
+        - A reusable workflow (pr-checks, triage, auto-close, labels, retry, upgrade-check, release)
+        - A composite action (make-target, a capability, release-tool, matrix-filter, debug-ssh)
+        - The tool supply chain (versions.env, fetch_verified.sh)
+        - Something else / not sure
+    validations:
+      required: true
+
+  - type: input
+    id: ref
+    attributes:
+      label: Which version?
+      placeholder: "v1.0.1 — the whuppi/ci ref you pinned"
+    validations:
+      required: true
+
+  - type: input
+    id: consumer
+    attributes:
+      label: Consuming repo + failing run
+      placeholder: "whuppi/<repo>, plus a link to the failing Actions run"
+
+  - type: dropdown
+    id: runner
+    attributes:
+      label: Runner OS
+      options:
+        - ubuntu-24.04
+        - macos-latest
+        - windows-latest
+        - Multiple / not sure
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected vs actual
+      placeholder: What you expected the workflow or action to do, and what it did instead.
