@@ -1,0 +1,83 @@
+# whuppi/ci's own release cut. A GitHub release IS the artifact — no
+# compile/upload/publish. All logic lives in tool/ci/self_release.sh, which
+# stamps every internal @main ref to the release tag in a detached commit, tags
+# that commit, and creates the release. main never carries the stamp.
+#
+# Cut a release = merge a PR to main whose CHANGELOG.md gains a new top heading.
+name: Self Release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'CHANGELOG.md'
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  gate:
+    name: Release gate
+    if: github.repository_owner == 'whuppi'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      should_run: ${{ steps.check.outputs.should_run }}
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: false
+      - name: Version sanity
+        run: bash tool/ci/self_release.sh --check-versions
+      - name: Check changelog relevance
+        id: check
+        env:
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+        run: bash tool/ci/self_release.sh --gate
+
+  release:
+    name: Cut release
+    needs: gate
+    if: needs.gate.outputs.should_run == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    # RELEASE_TOKEN lives as an ENVIRONMENT secret here, not a repo secret —
+    # only jobs declaring this environment can read it (zizmor
+    # secrets-outside-env).
+    environment: release
+    permissions:
+      contents: write  # self_release.sh --discover tags + creates the release
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Stamp internal refs, tag, create the release
+        env:
+          # NOT the default GITHUB_TOKEN: the stamp commit modifies
+          # .github/workflows/ files, and GITHUB_TOKEN can never carry the
+          # `workflows` scope, so its push is rejected. RELEASE_TOKEN is a
+          # fine-grained PAT scoped to THIS repo with contents + workflows
+          # read/write, stored as a secret of the `release` environment
+          # (see docs/UPDATING.md "Cutting a release").
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::RELEASE_TOKEN secret is missing — a fine-grained PAT (this repo, contents + workflows RW) is required to push the stamped release commit. See docs/UPDATING.md."
+            exit 1
+          fi
+          bash tool/ci/self_release.sh --discover
