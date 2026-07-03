@@ -221,7 +221,14 @@ cmd_discover() {
   if git diff --cached --quiet; then
     echo "  Nothing to stamp — refs already pinned? (unexpected on main)"
   else
-    git commit -m "release: $tag (stamp internal refs)"
+    # Conventional-commit type so the commit-msg hook passes on a local cut
+    # (docs/UPDATING.md documents the maintainer-machine path). If the commit
+    # fails anyway, restore the tree so no stamped ref lingers uncommitted.
+    git commit -m "chore(release): $tag — stamp internal refs" || {
+      git reset --hard HEAD
+      echo "::error::stamp commit failed — tree restored, nothing stamped" >&2
+      return 1
+    }
   fi
 
   local stamped_sha staging
