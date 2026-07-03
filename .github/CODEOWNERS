@@ -1,0 +1,22 @@
+# Code ownership — enforced natively by GitHub's require_code_owner_reviews.
+#
+# Non-admin PRs need approval from a codeowner for every touched path.
+# Admin (repo owner) bypasses via enforce_admins: false.
+#
+# Order matters — last match wins (gitignore rules).
+
+# Default: maintainers team owns everything
+*                          @whuppi/ci-maintainers
+
+# Everything below is supply chain — every whuppi package's CI runs it.
+# Repo owner only: the pinned hashes (versions.env), the fail-closed download
+# gate (fetch_verified.sh), the release stamping (self_release.sh), the
+# workflows and actions consumers execute, and the canonical hooks.
+/.github/                  @chaudharydeepanshu
+/actions/                  @chaudharydeepanshu
+/tool/                     @chaudharydeepanshu
+/hooks/                    @chaudharydeepanshu
+/Makefile                  @chaudharydeepanshu
+
+# Release file: cutting a release is the maintainer's call.
+/CHANGELOG.md              @chaudharydeepanshu
