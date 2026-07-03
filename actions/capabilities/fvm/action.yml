@@ -133,3 +133,14 @@ runs:
         fvm dart --version
         fvm flutter --version
         echo "::endgroup::"
+
+        # Resolve the project's deps so every make target runs against a fully
+        # resolved package. Without this a cold `dart analyze` (no .dart_tool,
+        # empty pub cache) can't resolve dependency types, so `strict-inference`
+        # flags every generic call as "can't infer" — a spurious flood that
+        # vanishes once deps are present. `flutter pub get` is universal: it
+        # works for pure-Dart packages too, and does not run native-asset build
+        # hooks (those fire on run/build/test, not resolve).
+        echo "::group::flutter pub get"
+        fvm flutter pub get
+        echo "::endgroup::"
