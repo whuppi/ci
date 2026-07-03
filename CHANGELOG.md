@@ -20,6 +20,9 @@ no-op Dependabot bump:
   `ref: main` into the release — a consumer's pinned `pr-checks` then pulled
   `main`'s tool scripts). The stamp self-verifies no `@main` / `ref: main`
   survives.
+- Release stamp identity is applied per-commit (`git -c`), never persisted to
+  the repo config — a local `make release` no longer re-authors the
+  maintainer's later commits as the bot.
 
 ## 1.0.1
 

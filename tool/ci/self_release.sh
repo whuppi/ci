@@ -62,9 +62,15 @@ gh_output() {
   echo "  output: $1=$2"
 }
 
+# The stamp commit is attributed to the CI bot — it is a mechanical release
+# artifact, and CI's runner has no other identity. Applied PER-COMMIT via
+# `git -c` at the commit site, NEVER `git config`: a persisted identity would
+# re-author every later commit a local `make release` maintainer makes.
+CI_BOT_NAME="github-actions[bot]"
+CI_BOT_EMAIL="github-actions[bot]@users.noreply.github.com"
+
 git_ci_identity() {
-  git config user.name  "github-actions[bot]"
-  git config user.email "github-actions[bot]@users.noreply.github.com"
+  # Push auth only. The commit identity is applied per-commit, never persisted.
   [ -n "${GH_TOKEN:-}" ] && gh auth setup-git
 }
 
@@ -248,7 +254,8 @@ cmd_discover() {
     # Conventional-commit type so the commit-msg hook passes on a local cut
     # (docs/UPDATING.md documents the maintainer-machine path). If the commit
     # fails anyway, restore the tree so no stamped ref lingers uncommitted.
-    git commit -m "chore(release): $tag — stamp internal refs" || {
+    git -c user.name="$CI_BOT_NAME" -c user.email="$CI_BOT_EMAIL" \
+      commit -m "chore(release): $tag — stamp internal refs" || {
       git reset --hard HEAD
       echo "::error::stamp commit failed — tree restored, nothing stamped" >&2
       return 1
