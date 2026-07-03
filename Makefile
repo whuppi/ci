@@ -5,15 +5,17 @@ SHELL := /usr/bin/env bash
 
 check: lint-shell lint-actions
 
-# Cut a release LOCALLY (the maintainer, from their own machine). The stamp
-# commit rewrites @main → @vX.Y.Z inside .github/workflows/, which GitHub
-# forbids the CI GITHUB_TOKEN from pushing — so releasing runs here, on the
-# maintainer's own credentials, not in a workflow. Detaches HEAD so the stamp
-# never lands on main, then returns. Bump CHANGELOG.md's top heading first.
+# Cut a release LOCALLY (manual fallback — self-release.yml is the normal
+# path). Runs the SAME shared tool/ci/release.sh the workflow runs; the
+# internal-ref stamp is the release_stamp_tree hook in tool/ci/release_hooks.sh.
+# Uses your own credentials (they carry the workflows scope the stamped push
+# needs). Detaches HEAD so the stamp never lands on main, then returns.
+# Run from an up-to-date main after merging the changelog PR.
 release:
+	@[ -z "$$(git status --porcelain)" ] || { echo "working tree not clean — commit or stash first"; exit 1; }
 	@current=$$(git branch --show-current); \
 	git checkout --detach -q; \
-	GITHUB_REPOSITORY=whuppi/ci GH_TOKEN=$$(gh auth token) bash tool/ci/self_release.sh --discover; \
+	GITHUB_REPOSITORY=whuppi/ci GH_TOKEN=$$(gh auth token) BRANCH=main bash tool/ci/release.sh --discover; \
 	rc=$$?; git checkout -q "$$current"; exit $$rc
 
 # This repo uses its own canonical hooks directly (the same files stamped into

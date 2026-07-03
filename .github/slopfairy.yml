@@ -30,7 +30,8 @@ reviews:
     - path: "tool/**"
       instructions: >
         Supply chain. versions.env holds pinned sha256s; fetch_verified.sh is
-        the fail-closed download gate; self_release.sh does release stamping. A
+        the fail-closed download gate; the shared release.sh + this repo's
+        release_stamp_tree hook (release_hooks.sh) do release stamping. A
         change that weakens hash verification, floats a pin, or lets the stamp
         leak an unpinned ref is a supply-chain risk — flag it.
     - path: "hooks/**"
@@ -56,7 +57,8 @@ personality:
       an exact tag by each consumer.
     - Pinned, sha256-verified tool supply chain (tool/versions.env) with a daily
       upgrade radar (self-upgrade.yml).
-    - Versioned releases via internal-ref stamping (self_release.sh): main
+    - Versioned releases via internal-ref stamping (the release_stamp_tree hook
+      in tool/ci/release_hooks.sh, run by the shared release.sh): main
       carries @main refs; a release stamps them to the exact tag in a detached
       commit, self-verifying that no @main / ref: main leaks. self-check.yml
       guards that main only ever carries @main.

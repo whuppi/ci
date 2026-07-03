@@ -82,10 +82,11 @@ references — make-target → its capabilities, a reusable workflow → its
 `.whuppi-ci` checkout — must resolve to the SAME version the consumer pinned. On
 `main` every internal ref says `@main` (and `ref: main`), so the repo is
 self-consistent for anyone consuming `@main` and for its own PR checks. At
-release time, `make release` runs `tool/ci/self_release.sh --discover` on a
-detached HEAD (locally, on the maintainer's machine — see below), which
-rewrites every `@main` → `@vX.Y.Z` and every stamp-marked `ref: main` →
-`ref: vX.Y.Z` in a detached commit, tags that commit, and creates the release.
+release time, `self-release.yml` (or `make release` locally) runs the shared
+`tool/ci/release.sh --discover`, whose `release_stamp_tree` hook (in
+`tool/ci/release_hooks.sh`) rewrites every `@main` → `@vX.Y.Z` and every
+`whuppi/ci` checkout's `ref: main` → `ref: vX.Y.Z` in a detached commit, tags
+that commit, and creates the release.
 `main` never carries the stamp. `self-check.yml`'s `internal-refs-are-main` job
 fails any PR that hand-writes a version tag into an internal ref, so a stamped
 ref can't leak back onto `main` and freeze internals at an old release.
@@ -120,11 +121,14 @@ workspace's `stamp-hooks.sh` re-stamps every consumer when they change.
 
 ## The release surface
 
-`tool/ci/release.sh` (consumer releases) and `tool/ci/self_release.sh` (this
-repo's own) share the same changelog-driven shape — a two-lane
-(`CHANGELOG.md` + `CHANGELOG.pre.md`) model for packages, single-lane for this
-repo. Both gate on "one new version at the top; every heading below is tagged",
-discover the version, stamp a tag commit, and create the release. The mode
+One engine — `tool/ci/release.sh` — releases every repo: consumers run it via
+the release-tool action, and this repo runs it directly. It's changelog-driven —
+a two-lane (`CHANGELOG.md` + `CHANGELOG.pre.md`) model for packages, single-lane
+(`CHANGELOG.md` on `main`) for this repo. It gates on "one new version at the
+top; every heading below is tagged", discovers the version, stamps a tag commit,
+and creates the release. Per-repo tree edits at stamp time are the
+`release_stamp_tree` hook in each repo's `tool/ci/release_hooks.sh` (this repo:
+the internal-ref freeze; pdf_manipulator: extra asset hashes). The mode
 tables live in each script's header — read those, not a copy here.
 
 ## Tag + release discipline for this repo

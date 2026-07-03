@@ -1,7 +1,10 @@
 # whuppi/ci's own release cut. A GitHub release IS the artifact — no
-# compile/upload/publish. All logic lives in tool/ci/self_release.sh, which
-# stamps every internal @main ref to the release tag in a detached commit, tags
-# that commit, and creates the release. main never carries the stamp.
+# compile/upload/publish. Runs the SHARED tool/ci/release.sh from this repo's
+# own checkout — the same engine consumers run via the release-tool action —
+# so gate/discover/notes behavior is identical everywhere. The one ci-specific
+# piece — freezing internal @main refs to the tag — is the release_stamp_tree
+# hook in tool/ci/release_hooks.sh. main never carries the stamp: the stamped
+# commit is detached, pushed to a staging branch, and kept alive by the tag.
 #
 # Cut a release = merge a PR to main whose CHANGELOG.md gains a new top heading.
 name: Self Release
@@ -15,6 +18,7 @@ on:
 
 permissions: {}
 
+# A release must finish — never cancel an in-flight release run.
 concurrency:
   group: ${{ github.workflow }}
   cancel-in-progress: false
@@ -41,13 +45,16 @@ jobs:
           fetch-tags: true
           persist-credentials: false
       - name: Version sanity
-        run: bash tool/ci/self_release.sh --check-versions
+        env:
+          BRANCH: main
+        run: bash tool/ci/release.sh --check-versions
       - name: Check changelog relevance
         id: check
         env:
+          BRANCH: main
           BEFORE: ${{ github.event.before }}
           AFTER: ${{ github.sha }}
-        run: bash tool/ci/self_release.sh --gate
+        run: bash tool/ci/release.sh --gate
 
   release:
     name: Cut release
@@ -60,14 +67,16 @@ jobs:
     # secrets-outside-env).
     environment: release
     permissions:
-      contents: write  # self_release.sh --discover tags + creates the release
+      contents: write  # release.sh --discover tags + creates the release
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
+          fetch-tags: true
           persist-credentials: false
       - name: Stamp internal refs, tag, create the release
         env:
+          BRANCH: main
           # NOT the default GITHUB_TOKEN: the stamp commit modifies
           # .github/workflows/ files, and GITHUB_TOKEN can never carry the
           # `workflows` scope, so its push is rejected. RELEASE_TOKEN is a
@@ -80,4 +89,4 @@ jobs:
             echo "::error::RELEASE_TOKEN secret is missing — a fine-grained PAT (this repo, contents + workflows RW) is required to push the stamped release commit. See docs/UPDATING.md."
             exit 1
           fi
-          bash tool/ci/self_release.sh --discover
+          bash tool/ci/release.sh --discover

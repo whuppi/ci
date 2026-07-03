@@ -64,13 +64,21 @@ VERSION="${TAG:+${TAG#v}}"
 source "$SCRIPT_DIR/../lib.sh"
 ensure_jq  # this script parses pub.dev JSON via jq
 
-# The consumer package is the CURRENT WORKING DIRECTORY; this script lives in
+# The consumer repo is the CURRENT WORKING DIRECTORY; this script lives in
 # the whuppi/ci checkout. Identity comes from the environment + the pubspec.
 # For a local dry run, export GITHUB_REPOSITORY yourself (owner/repo).
+#
+# A repo with no pubspec.yaml (whuppi/ci releasing itself) is not a Dart
+# package: PKG_NAME falls back to the repo slug for release titles, and the
+# pub.dev-specific modes guard themselves with require_pubspec.
 REPO="${GITHUB_REPOSITORY:?release.sh requires GITHUB_REPOSITORY (owner/repo)}"
 REPO_URL="https://github.com/$REPO"
-PKG_NAME="$(sed -n 's/^name:[[:space:]]*//p' pubspec.yaml | head -1)"
-[ -n "$PKG_NAME" ] || { echo "::error::no 'name:' in pubspec.yaml — run from the package root" >&2; exit 1; }
+if [ -f pubspec.yaml ]; then
+  PKG_NAME="$(sed -n 's/^name:[[:space:]]*//p' pubspec.yaml | head -1)"
+  [ -n "$PKG_NAME" ] || { echo "::error::no 'name:' in pubspec.yaml — run from the package root" >&2; exit 1; }
+else
+  PKG_NAME="$REPO"
+fi
 
 
 usage() {
@@ -122,6 +130,16 @@ require_tag() {
   fi
 }
 
+# Modes that build the pub.dev tarball surface only make sense for a Dart
+# package. Refuse loudly on a repo without one (also catches running from
+# the wrong directory).
+require_pubspec() {
+  if [ ! -f pubspec.yaml ]; then
+    echo "Error: $MODE requires a Dart package (no pubspec.yaml in $(pwd))" >&2
+    exit 1
+  fi
+}
+
 
 # ════════════════════════════════════════════════════════════════════
 # § 2 — Generic helpers
@@ -135,15 +153,18 @@ gh_output() {
   echo "  output: $1=$2"
 }
 
-# Configure the git identity + push auth used for CI commits.
-git_ci_identity() {
-  git config user.name  "github-actions[bot]"
-  git config user.email "github-actions[bot]@users.noreply.github.com"
+# Release commits are attributed to the CI bot — they are mechanical release
+# artifacts. The identity is applied PER-COMMIT via `git -c` at each commit
+# site, NEVER persisted with `git config`: a persisted identity survives the
+# run and re-authors every later commit a maintainer makes after a local cut.
+CI_BOT_NAME="github-actions[bot]"
+CI_BOT_EMAIL="github-actions[bot]@users.noreply.github.com"
 
-  # The release checkout uses persist-credentials:false (zizmor hardening leaves
-  # no token in git config for later steps to leak), so these pushes have no auth.
-  # Wire gh's token in as a credential helper — the same GH_TOKEN `gh release`
-  # already uses. Skipped on a local dry run, where the push uses your own creds.
+git_ci_identity() {
+  # Push auth only. The release checkout uses persist-credentials:false
+  # (zizmor hardening), so pushes have no auth without this. Wire gh's token
+  # in as a credential helper — the same GH_TOKEN `gh release` already uses.
+  # Skipped on a local dry run, where the push uses your own creds.
   if [ -n "${GH_TOKEN:-}" ]; then
     gh auth setup-git
   fi
@@ -183,6 +204,16 @@ pick_source_file() {
   fi
 }
 
+# Resolve the changelog lane for a release branch. Package repos release
+# stable versions from `prod` and prereleases from `dev`; whuppi/ci itself
+# releases stable versions from `main` (single-lane repo, no dev/prod).
+lane_changelog_file() {
+  case "$1" in
+    prod|main) echo "CHANGELOG.md" ;;
+    *)         echo "CHANGELOG.pre.md" ;;
+  esac
+}
+
 # Fetch every published version of the package from pub.dev.
 get_published_versions() {
   curl -sS --retry 3 --retry-delay 2 --connect-timeout 10 --max-time 30 "https://pub.dev/api/packages/$PKG_NAME" 2>/dev/null \
@@ -193,6 +224,12 @@ get_published_versions() {
 # Stamp a version string into pubspec.yaml, version.dart, and README.md.
 stamp_version() {
   local ver="$1"
+  # A repo with no pubspec (whuppi/ci itself) carries no version in-tree —
+  # the tag and the changelog are the only version records. Nothing to stamp.
+  if [ ! -f pubspec.yaml ]; then
+    echo "  no pubspec.yaml — version lives in the tag + changelog only"
+    return 0
+  fi
   sed -i.bak "s/^version: .*/version: $ver/" pubspec.yaml && rm -f pubspec.yaml.bak
   echo "  pubspec.yaml → $ver"
   # Not every package carries the version constant — stamp it only if present.
@@ -517,11 +554,7 @@ build_pubdev_changelog() {
 cmd_gate() {
   local branch="${BRANCH:?--gate requires BRANCH env var}"
   local target_file
-  if [[ "$branch" == "prod" ]]; then
-    target_file="CHANGELOG.md"
-  else
-    target_file="CHANGELOG.pre.md"
-  fi
+  target_file=$(lane_changelog_file "$branch")
 
   local changed_files
   if [ -z "${BEFORE:-}" ]; then
@@ -586,11 +619,7 @@ cmd_gate() {
 cmd_discover() {
   local branch="${BRANCH:?--discover requires BRANCH env var}"
   local file
-  if [[ "$branch" == "prod" ]]; then
-    file="CHANGELOG.md"
-  else
-    file="CHANGELOG.pre.md"
-  fi
+  file=$(lane_changelog_file "$branch")
 
   if [ ! -f "$file" ]; then
     gh_output "has_release" "false"
@@ -610,13 +639,15 @@ cmd_discover() {
   local is_pre=false
   [[ "$version" == *-* ]] && is_pre=true
 
-  if [[ "$branch" == "prod" && "$is_pre" == "true" ]]; then
-    echo "Skipping prerelease $version on prod."
+  # The stable lane releases only stable versions; the prerelease lane only
+  # prereleases. (prod/main ↔ CHANGELOG.md, dev ↔ CHANGELOG.pre.md.)
+  if [[ "$file" == "CHANGELOG.md" && "$is_pre" == "true" ]]; then
+    echo "Skipping prerelease $version on $branch."
     gh_output "has_release" "false"
     return 0
   fi
-  if [[ "$branch" == "dev" && "$is_pre" == "false" ]]; then
-    echo "Skipping stable $version on dev."
+  if [[ "$file" == "CHANGELOG.pre.md" && "$is_pre" == "false" ]]; then
+    echo "Skipping stable $version on $branch."
     gh_output "has_release" "false"
     return 0
   fi
@@ -665,6 +696,21 @@ cmd_discover() {
     echo "  .gitmodules removed"
   fi
 
+  # Optional consumer extension: tool/ci/release_hooks.sh (in the consumer
+  # repo, the CWD) may define release_stamp_tree TAG — extra tree edits that
+  # belong in the stamped tag commit. whuppi/ci itself uses this to freeze
+  # its internal @main refs to the tag. The hook edits files only; the
+  # commit below picks the edits up. It must fail (non-zero) to abort the
+  # release when its edits can't be applied completely.
+  if [ -f tool/ci/release_hooks.sh ]; then
+    # shellcheck source=/dev/null  # consumer-owned; not resolvable at lint time
+    source tool/ci/release_hooks.sh
+    if declare -F release_stamp_tree >/dev/null; then
+      echo "=== release_stamp_tree hook ==="
+      release_stamp_tree "$tag"
+    fi
+  fi
+
   # ── Commit, push to staging, create the GitHub Release ──
   git_ci_identity
   # Exclude the whuppi/ci checkout the calling workflow made — it sits in the
@@ -674,7 +720,8 @@ cmd_discover() {
   if git diff --cached --quiet; then
     echo "  Tree already stamped — skipping commit"
   else
-    git commit -m "release: $tag"
+    git -c user.name="$CI_BOT_NAME" -c user.email="$CI_BOT_EMAIL" \
+      commit -m "release: $tag"
   fi
 
   local stamped_sha
@@ -749,7 +796,8 @@ cmd_update_tag_hashes() {
     return 0
   fi
 
-  git commit -m "stamp: asset hashes for $TAG"
+  git -c user.name="$CI_BOT_NAME" -c user.email="$CI_BOT_EMAIL" \
+    commit -m "stamp: asset hashes for $TAG"
   local new_sha
   new_sha=$(git rev-parse HEAD)
   git tag -f "$TAG" "$new_sha"
@@ -767,6 +815,7 @@ cmd_update_tag_hashes() {
 
 cmd_stamp_changelog() {
   require_tag
+  require_pubspec
   echo "=== Building changelog for $TAG ==="
   build_pubdev_changelog "$TAG" > /tmp/_changelog_pubdev.md
   mv /tmp/_changelog_pubdev.md CHANGELOG.md
@@ -790,6 +839,7 @@ cmd_stamp_changelog() {
 # ════════════════════════════════════════════════════════════════════
 
 cmd_stamp_readme() {
+  require_pubspec
   echo "=== Flattening README <picture> banner for pub.dev ==="
   if ! grep -qE '^[[:space:]]*<picture>[[:space:]]*$' README.md; then
     echo "  no <picture> banner; nothing to flatten"
@@ -854,6 +904,7 @@ dependencies:
 
 cmd_add_pub_install() {
   require_tag
+  require_pubspec
   local section
   section="### Install (pub.dev)
 
@@ -917,11 +968,7 @@ dependencies:
 cmd_check_versions() {
   local branch="${BRANCH:?--check-versions requires BRANCH env var}"
   local file
-  if [[ "$branch" == "prod" ]]; then
-    file="CHANGELOG.md"
-  else
-    file="CHANGELOG.pre.md"
-  fi
+  file=$(lane_changelog_file "$branch")
 
   if [ ! -f "$file" ]; then
     echo "✓ no $file — nothing to check"

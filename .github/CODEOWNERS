@@ -10,7 +10,7 @@
 
 # Everything below is supply chain — every whuppi package's CI runs it.
 # Repo owner only: the pinned hashes (versions.env), the fail-closed download
-# gate (fetch_verified.sh), the release stamping (self_release.sh), the
+# gate (fetch_verified.sh), the release engine (release.sh + release_hooks.sh), the
 # workflows and actions consumers execute, and the canonical hooks.
 /.github/                  @chaudharydeepanshu
 /actions/                  @chaudharydeepanshu
