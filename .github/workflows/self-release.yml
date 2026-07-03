@@ -55,6 +55,10 @@ jobs:
     if: needs.gate.outputs.should_run == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    # RELEASE_TOKEN lives as an ENVIRONMENT secret here, not a repo secret —
+    # only jobs declaring this environment can read it (zizmor
+    # secrets-outside-env).
+    environment: release
     permissions:
       contents: write  # self_release.sh --discover tags + creates the release
     steps:
@@ -68,7 +72,8 @@ jobs:
           # .github/workflows/ files, and GITHUB_TOKEN can never carry the
           # `workflows` scope, so its push is rejected. RELEASE_TOKEN is a
           # fine-grained PAT scoped to THIS repo with contents + workflows
-          # read/write (see docs/UPDATING.md "Cutting a release").
+          # read/write, stored as a secret of the `release` environment
+          # (see docs/UPDATING.md "Cutting a release").
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
         run: |
           if [ -z "$GH_TOKEN" ]; then

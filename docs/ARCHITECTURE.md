@@ -137,11 +137,11 @@ say `@main`).
 
 The one-time sequence when this repo goes to GitHub:
 
-1. Create `whuppi/ci` → push `main` → add the `RELEASE_TOKEN` secret (a
-   fine-grained PAT for this repo, contents + workflows RW — the stamp commit
-   touches workflow files, which `GITHUB_TOKEN` can't push). Then a
-   `self-release.yml` dispatch cuts `v1.0.0` from the seeded changelog
-   heading — never hand-tag.
+1. Create `whuppi/ci` → push `main` → add the `RELEASE_TOKEN` secret to the
+   `release` environment (a fine-grained PAT for this repo, contents +
+   workflows RW — the stamp commit touches workflow files, which
+   `GITHUB_TOKEN` can't push). Then a `self-release.yml` dispatch cuts
+   `v1.0.0` from the seeded changelog heading — never hand-tag.
 2. Org Actions access: if the repo is private, Settings → Actions → Access →
    "Accessible from repositories in the whuppi organization" (public needs
    nothing).

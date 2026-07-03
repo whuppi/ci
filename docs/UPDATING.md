@@ -67,10 +67,12 @@ then commit each consumer's re-stamped files. Never edit a consumer's
 
 ## Cutting a release
 
-Prerequisite (one-time): a `RELEASE_TOKEN` repo secret — a fine-grained PAT
-scoped to THIS repo with **contents + workflows read/write**. The stamp commit
-modifies `.github/workflows/` files, and the default `GITHUB_TOKEN` can never
-carry the `workflows` scope, so its push is rejected.
+Prerequisite (one-time): a `RELEASE_TOKEN` secret on the `release`
+environment — a fine-grained PAT scoped to THIS repo with **contents +
+workflows read/write**. The stamp commit modifies `.github/workflows/` files,
+and the default `GITHUB_TOKEN` can never carry the `workflows` scope, so its
+push is rejected. An environment secret (not a repo secret) so only the
+release job can read it.
 
 1. PR to `main` adding a new top heading to `CHANGELOG.md` (MAJOR/MINOR/PATCH
    per the README's rules) with a short summary.
