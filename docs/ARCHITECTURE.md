@@ -82,7 +82,8 @@ references — make-target → its capabilities, a reusable workflow → its
 `.whuppi-ci` checkout — must resolve to the SAME version the consumer pinned. On
 `main` every internal ref says `@main` (and `ref: main`), so the repo is
 self-consistent for anyone consuming `@main` and for its own PR checks. At
-release time, `self-release.yml` runs `tool/ci/self_release.sh --discover`, which
+release time, `make release` runs `tool/ci/self_release.sh --discover` on a
+detached HEAD (locally, on the maintainer's machine — see below), which
 rewrites every `@main` → `@vX.Y.Z` and every stamp-marked `ref: main` →
 `ref: vX.Y.Z` in a detached commit, tags that commit, and creates the release.
 `main` never carries the stamp. `self-check.yml`'s `internal-refs-are-main` job
@@ -128,20 +129,25 @@ tables live in each script's header — read those, not a copy here.
 
 ## Tag + release discipline for this repo
 
-Cut a release by merging a PR to `main` whose `CHANGELOG.md` gains a new top
-heading; `self-release.yml` does the rest. Never hand-tag `main` — the tag must
-point at the stamped detached commit, not at `main` (whose internal refs still
-say `@main`).
+Cut a release by bumping `CHANGELOG.md`'s top heading (via a merged PR to
+`main`), then running `make release` locally. It stamps internal refs, tags the
+detached stamped commit, and creates the GitHub release. Never hand-tag `main` —
+the tag must point at the stamped detached commit, not at `main` (whose internal
+refs still say `@main`).
+
+Why local, not a workflow: the stamp commit edits `.github/workflows/` files,
+and GitHub forbids the CI `GITHUB_TOKEN` from pushing workflow-file changes (so
+a workflow can't rewrite itself). Running `make release` on the maintainer's own
+credentials sidesteps that — no stored PAT, no `release` environment, no
+release CI job. The maintainer is the only releaser, so a local command is the
+simplest correct shape.
 
 ## First-push runbook
 
 The one-time sequence when this repo goes to GitHub:
 
-1. Create `whuppi/ci` → push `main` → add the `RELEASE_TOKEN` secret to the
-   `release` environment (a fine-grained PAT for this repo, contents +
-   workflows RW — the stamp commit touches workflow files, which
-   `GITHUB_TOKEN` can't push). Then a `self-release.yml` dispatch cuts
-   `v1.0.0` from the seeded changelog heading — never hand-tag.
+1. Create `whuppi/ci` → push `main` → run `make release` locally to cut
+   `v1.0.0` from the seeded changelog heading (never hand-tag).
 2. Org Actions access: if the repo is private, Settings → Actions → Access →
    "Accessible from repositories in the whuppi organization" (public needs
    nothing).
@@ -151,8 +157,8 @@ The one-time sequence when this repo goes to GitHub:
    `Full Test Gate`, the pr-checks job names); run the labels workflow once
    via dispatch.
 
-Steady-state upgrade flow: merge a changelog PR here → self-release cuts
-`vX.Y.Z` → each consumer's Dependabot opens ONE grouped PR bumping every
+Steady-state upgrade flow: bump the changelog + `make release` here → `vX.Y.Z`
+is cut → each consumer's Dependabot opens ONE grouped PR bumping every
 whuppi/ci pin → that PR's fast gate runs automatically; add `ready-to-test`
 for the full matrix when the release touches test-path behavior → merge when
 green. Consumers upgrade independently; old pins work forever.

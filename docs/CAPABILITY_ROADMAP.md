@@ -35,7 +35,7 @@ planned. Statuses: **DONE** · **PLANNED** · **WONT_DO** (with reason).
 |---|---|---|
 | Pinned, sha256-verified tool downloads | DONE | `versions.env` + `fetch_verified.sh`; single-writer `set_kv` |
 | Daily pin radar with repoint alarm | DONE | `self-upgrade.yml` |
-| Immutable versioned releases with internal-ref stamping | DONE | `self-release.yml` + `self_release.sh`; guarded by self-check |
+| Immutable versioned releases with internal-ref stamping | DONE | `make release` (local, `self_release.sh`); guarded by self-check |
 | Grouped consumer upgrade PRs | DONE | each consumer's Dependabot `whuppi-ci` group (pattern `whuppi/ci*`) |
 | Canonical git hooks + commit-types, stamped to consumers | DONE | `hooks/` + the workspace stamp-hooks script |
 | Moving major tag (`@v1`) | WONT_DO | A moving tag updates every consumer at once, untested — the exact failure the versioned model exists to prevent |

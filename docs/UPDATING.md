@@ -67,24 +67,21 @@ then commit each consumer's re-stamped files. Never edit a consumer's
 
 ## Cutting a release
 
-Prerequisite (one-time): a `RELEASE_TOKEN` secret on the `release`
-environment — a fine-grained PAT scoped to THIS repo with **contents +
-workflows read/write**. The stamp commit modifies `.github/workflows/` files,
-and the default `GITHUB_TOKEN` can never carry the `workflows` scope, so its
-push is rejected. An environment secret (not a repo secret) so only the
-release job can read it.
+Releases are cut LOCALLY by the maintainer — there is no release CI workflow
+and no stored token. Why: the stamp commit edits `.github/workflows/` files,
+which GitHub forbids the CI `GITHUB_TOKEN` from pushing (a workflow can't
+rewrite itself). Running it on the maintainer's own credentials sidesteps that.
 
-1. PR to `main` adding a new top heading to `CHANGELOG.md` (MAJOR/MINOR/PATCH
-   per the README's rules) with a short summary.
-2. Merge. `self-release.yml` gates, stamps every internal `@main` →
-   `@vX.Y.Z` in a detached commit, tags it, creates the GitHub release.
+1. Merge a PR to `main` adding a new top heading to `CHANGELOG.md`
+   (MAJOR/MINOR/PATCH per the README's rules) with a short summary.
+2. Run `make release`. It detaches HEAD, stamps every internal `@main` →
+   `@vX.Y.Z`, tags the stamped commit, creates the GitHub release, and returns
+   to your branch. `main` never carries the stamp.
 3. Consumers' Dependabot opens one grouped PR each (after its cooldown); their
    own CI tests the bump before they merge.
 
-Never hand-tag `main` — the tag must point at the stamped commit. A release
-can also be cut from a maintainer machine (credentials with the workflow
-scope): `git checkout --detach && GITHUB_REPOSITORY=whuppi/ci bash
-tool/ci/self_release.sh --discover && git checkout main`.
+Never hand-tag `main` — the tag must point at the stamped commit (`make
+release` handles this).
 
 ## When a pinned asset breaks
 
