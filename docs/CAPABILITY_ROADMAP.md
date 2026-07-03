@@ -46,4 +46,4 @@ planned. Statuses: **DONE** · **PLANNED** · **WONT_DO** (with reason).
 |---|---|---|
 | Shared pana platform-gate | PLANNED | pdf (`tool/platforms.sh`) and device_io (`tool/check_platforms.dart`) implement the same six-platform gate differently; standardize when the next package needs one |
 | Org-level `.github` repo for default issue/PR templates | PLANNED | GitHub-native dedup for community-health defaults; per-repo overrides keep working. Needs a new repo — maintainer decision |
-| AGENTS.md placeholder data freshness check | PLANNED | The workspace stamper's per-repo data can go stale against a repo's committed AGENTS.md (observed for pdf_manipulator); a drift check would catch it |
+| AGENTS.md placeholder data freshness check | PLANNED | The workspace stamper's per-repo data can go stale against a repo's committed AGENTS.md (observed and fixed for pdf_manipulator + slopfairy); a mechanical drift check — dry-run the stamper, fail on "would stamp" — would catch the next one |
