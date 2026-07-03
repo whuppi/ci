@@ -4,6 +4,21 @@ Releases are cut from the top heading here by `self-release.yml`; consumers pin
 an exact version and upgrade through grouped Dependabot PRs. Versioning rules
 live in the README. Newest first.
 
+## 1.0.5
+
+Internal fix — no change to the caller / Makefile contract, so consumers get a
+no-op Dependabot bump. But Windows CI now builds Flutter plugins that ship
+Kotlin sources (file_picker, etc.) correctly:
+
+- The `fvm` capability pins `PUB_CACHE` to the workspace drive on Windows
+  runners. GitHub checks out on `D:` while pub's default cache sits on `C:`,
+  and Kotlin's incremental compiler calls `File.relativeTo` across the two
+  drive roots — it throws `this and base files have different roots` and fails
+  `assembleDebug` / `assembleRelease` for any plugin carrying Kotlin sources
+  (flutter/flutter#105395, #88234, #136160). Pinning the cache to the checkout
+  drive gives plugin sources and build output one shared root. The pub-cache
+  cache-key path follows the same drive so caching still hits on Windows.
+
 ## 1.0.4
 
 Supply-chain pin bump — no change to the caller / Makefile contract, so
