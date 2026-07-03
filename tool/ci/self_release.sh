@@ -62,9 +62,15 @@ gh_output() {
   echo "  output: $1=$2"
 }
 
+# The stamp commit is attributed to the CI bot — it is a mechanical release
+# artifact, and CI's runner has no other identity. Applied PER-COMMIT via
+# `git -c` at the commit site, NEVER `git config`: a persisted identity would
+# re-author every later commit a local `make release` maintainer makes.
+CI_BOT_NAME="github-actions[bot]"
+CI_BOT_EMAIL="github-actions[bot]@users.noreply.github.com"
+
 git_ci_identity() {
-  git config user.name  "github-actions[bot]"
-  git config user.email "github-actions[bot]@users.noreply.github.com"
+  # Push auth only. The commit identity is applied per-commit, never persisted.
   [ -n "${GH_TOKEN:-}" ] && gh auth setup-git
 }
 
@@ -169,25 +175,49 @@ cmd_check_versions() {
 }
 
 # ── the stamp ───────────────────────────────────────────────────────
-# Rewrite every internal whuppi/ci ref @main → @<tag>, and every
-# `ref: main` marked by the stamp comment → `ref: <tag>`, across the
-# tracked workflow + action files. Fails if any @main survives.
+# Rewrite every internal whuppi/ci reference @main → @<tag> at release:
+#   • `uses: whuppi/ci/...@main`         → `@<tag>`     (all such refs)
+#   • a whuppi/ci checkout's `ref: main` → `ref: <tag>`
+# The checkout ref is stamped BLOCK-AWARE, not by a marker comment: any
+# `ref: main` YAML key sitting inside a `repository: whuppi/ci` checkout is
+# stamped, so a forgotten comment can never silently leak a ref. Matched by
+# exact YAML-key shape (`^\s*ref:\s*main...$`), so a guard's grep string that
+# merely mentions the tokens is never touched, and a plain self-checkout
+# (`actions/checkout` with no `repository:`) correctly stays `ref: main`.
+# Self-verifies: fails if any internal @main / whuppi-ci `ref: main` survives.
 stamp_internal_refs() {
   local tag="$1" f
   while IFS= read -r f; do
     [ -f "$f" ] || continue
-    sed -i.bak \
-      -e "s|\(uses:[[:space:]]*whuppi/ci[^@[:space:]]*\)@main|\1@$tag|g" \
-      -e "s|^\([[:space:]]*ref:\)[[:space:]]*main[[:space:]]*#[[:space:]]*stamped.*$|\1 $tag|" \
-      "$f" && rm -f "$f.bak"
+    awk -v tag="$tag" '
+      { line = $0 }
+      line ~ /^[[:space:]]*repository:[[:space:]]*whuppi\/ci[[:space:]]*$/ { inblk = 1 }
+      inblk && line ~ /^[[:space:]]*ref:[[:space:]]*main([[:space:]]*(#.*)?)?$/ {
+        match(line, /^[[:space:]]*/); line = substr(line, 1, RLENGTH) "ref: " tag; inblk = 0
+      }
+      line ~ /^[[:space:]]*-[[:space:]]/ { inblk = 0 }
+      { print line }
+    ' "$f" > "$f.stamp.tmp"
+    sed "s|\(uses:[[:space:]]*whuppi/ci[^@[:space:]]*\)@main|\1@$tag|g" "$f.stamp.tmp" > "$f"
+    rm -f "$f.stamp.tmp"
   done < <(git ls-files '.github/workflows/*.yml' 'actions/*/action.yml' 'actions/*/*/action.yml')
 
-  local leftover
-  leftover=$(grep -rnE 'uses:[[:space:]]*whuppi/ci[^@[:space:]]*@main' \
-    .github/workflows/ actions/ 2>/dev/null || true)
-  if [ -n "$leftover" ]; then
-    printf '%s\n' "$leftover" >&2
-    echo "::error::stamp left @main internal refs unresolved — see above" >&2
+  local uses_left ref_left
+  uses_left=$(grep -rnE 'uses:[[:space:]]*whuppi/ci[^@[:space:]]*@main' \
+    .github/workflows/ actions/ 2>/dev/null | grep -vE '^[^:]+:[0-9]+:[[:space:]]*#' || true)
+  ref_left=$(
+    while IFS= read -r f; do
+      awk -v F="$f" '
+        $0 ~ /^[[:space:]]*repository:[[:space:]]*whuppi\/ci[[:space:]]*$/ { inblk = 1; next }
+        inblk && $0 ~ /^[[:space:]]*ref:[[:space:]]*main([[:space:]]*(#.*)?)?$/ { print F ": " $0; inblk = 0 }
+        $0 ~ /^[[:space:]]*-[[:space:]]/ { inblk = 0 }
+      ' "$f"
+    done < <(git ls-files '.github/workflows/*.yml' 'actions/*/action.yml' 'actions/*/*/action.yml')
+  )
+  if [ -n "$uses_left$ref_left" ]; then
+    [ -n "$uses_left" ] && printf '%s\n' "$uses_left" >&2
+    [ -n "$ref_left" ]  && printf '%s\n' "$ref_left" >&2
+    echo "::error::stamp left internal @main / whuppi-ci ref: main unresolved — see above" >&2
     return 1
   fi
 }
@@ -224,7 +254,8 @@ cmd_discover() {
     # Conventional-commit type so the commit-msg hook passes on a local cut
     # (docs/UPDATING.md documents the maintainer-machine path). If the commit
     # fails anyway, restore the tree so no stamped ref lingers uncommitted.
-    git commit -m "chore(release): $tag — stamp internal refs" || {
+    git -c user.name="$CI_BOT_NAME" -c user.email="$CI_BOT_EMAIL" \
+      commit -m "chore(release): $tag — stamp internal refs" || {
       git reset --hard HEAD
       echo "::error::stamp commit failed — tree restored, nothing stamped" >&2
       return 1
