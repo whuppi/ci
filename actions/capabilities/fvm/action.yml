@@ -12,7 +12,10 @@ runs:
     - name: Cache pub packages
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
-        path: ~/.pub-cache
+        # Windows: cache the workspace-drive pub cache the install step pins
+        # below (the C: default is a different drive from the D: checkout and
+        # breaks Kotlin plugin builds). Elsewhere the ~ default is fine.
+        path: ${{ runner.os == 'Windows' && format('{0}/pub-cache', runner.temp) || '~/.pub-cache' }}
         key: pub-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pubspec.yaml', 'example/pubspec.yaml') }}
         restore-keys: pub-${{ runner.os }}-${{ runner.arch }}-
 
@@ -123,6 +126,25 @@ runs:
           echo "$FVM_CACHE"
           echo "__FVM_ENV__"
         } >> "$GITHUB_ENV"
+
+        # On GitHub's Windows runners the checkout is on D: but pub's default
+        # cache is on C:. Kotlin's incremental compiler runs File.relativeTo
+        # across the two drive roots and throws "this and base files have
+        # different roots" for any plugin carrying Kotlin sources (file_picker,
+        # etc.) — flutter/flutter#105395, #88234, #136160. Pin the cache to the
+        # workspace drive so plugin sources and build output share one root.
+        # RUNNER_TEMP is runner-controlled; random-delimiter heredoc so a path
+        # newline can't inject extra entries.
+        if [[ "$OS" == "windows" ]]; then
+          WIN_PUB_CACHE="$RUNNER_TEMP/pub-cache"
+          mkdir -p "$WIN_PUB_CACHE"
+          export PUB_CACHE="$WIN_PUB_CACHE"
+          {
+            echo "PUB_CACHE<<__PUB_ENV__"
+            echo "$WIN_PUB_CACHE"
+            echo "__PUB_ENV__"
+          } >> "$GITHUB_ENV"
+        fi
 
         # ── Verify + install via bare `fvm` (uniform across every OS) ──
         fvm --version
