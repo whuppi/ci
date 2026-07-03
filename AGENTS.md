@@ -84,7 +84,7 @@ When in doubt, read existing code in this repo and match it. Per-repo style cons
 
 **The canonical git hooks live in `hooks/`** and are stamped into consumer repos by the workspace's `stamp-hooks.sh` — edit them here, restamp everywhere. Same for `tool/commit-types.txt`.
 
-**Docs:** `docs/ARCHITECTURE.md` (consumption, stamping, release model, first-push runbook), `docs/UPDATING.md` (maintenance recipes), `docs/CAPABILITY_ROADMAP.md` (shared vs consumer-side, planned), `docs/MIGRATION.md` (consumer onboarding + majors).
+**Docs:** `docs/ARCHITECTURE.md` (consumption, stamping, release model, first-push runbook + consumer onboarding), `docs/UPDATING.md` (maintenance recipes), `docs/CAPABILITY_ROADMAP.md` (shared vs consumer-side, planned).
 
 ---
 

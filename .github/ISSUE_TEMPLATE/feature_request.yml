@@ -1,0 +1,27 @@
+name: Feature request
+description: Propose a new capability, workflow, or action for the shared CI
+labels: [enhancement]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What do you need?
+      placeholder: Describe the capability, reusable workflow, or composite action you'd like the shared CI to provide.
+    validations:
+      required: true
+
+  - type: textarea
+    id: why
+    attributes:
+      label: What's your use case?
+      placeholder: Which consumer repos need this? What problem does it solve, and how are you working around it today?
+
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Shared or consumer-side?
+      description: Does this belong in the shared CI (every consumer benefits), or is it specific to one repo?
+      options:
+        - Shared — multiple consumers would use it
+        - Not sure
+        - Consumer-specific (might stay in that repo)

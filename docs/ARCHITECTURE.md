@@ -160,6 +160,15 @@ The one-time sequence when this repo goes to GitHub:
    repo-setup branch protection with the new required checks (`CI Gate`,
    `Full Test Gate`, the pr-checks job names); run the labels workflow once
    via dispatch.
+4. Slopfairy (the shared AI review bot — part of CI/CD, easy to miss because it
+   lives outside the repo's own files): add the repo to the `slopfairy-bot` org
+   team with push
+   (`gh api orgs/whuppi/teams/slopfairy-bot/repos/whuppi/<repo> -X PUT -f permission=push`),
+   install the `slopfairy-prod` GitHub App on the repo (org **Settings → GitHub
+   Apps → slopfairy-prod → Configure →** add it — the REST install endpoint is
+   org-owner-only, so this is a web step), and add `.github/slopfairy.yml` (copy
+   device_io's for a pure package, pdf_manipulator's for a native one). Without
+   the team + app she can't see the repo's PRs at all.
 
 Steady-state upgrade flow: merge a changelog PR here → `self-release.yml`
 cuts `vX.Y.Z` → each consumer's Dependabot opens ONE grouped PR bumping every
