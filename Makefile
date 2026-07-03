@@ -1,9 +1,20 @@
 # Local gates for the whuppi/ci repo itself. CI mirrors these in self-check.yml.
 SHELL := /usr/bin/env bash
 
-.PHONY: check hooks lint-shell lint-actions pins-check
+.PHONY: check hooks lint-shell lint-actions pins-check release
 
 check: lint-shell lint-actions
+
+# Cut a release LOCALLY (the maintainer, from their own machine). The stamp
+# commit rewrites @main → @vX.Y.Z inside .github/workflows/, which GitHub
+# forbids the CI GITHUB_TOKEN from pushing — so releasing runs here, on the
+# maintainer's own credentials, not in a workflow. Detaches HEAD so the stamp
+# never lands on main, then returns. Bump CHANGELOG.md's top heading first.
+release:
+	@current=$$(git branch --show-current); \
+	git checkout --detach -q; \
+	GITHUB_REPOSITORY=whuppi/ci GH_TOKEN=$$(gh auth token) bash tool/ci/self_release.sh --discover; \
+	rc=$$?; git checkout -q "$$current"; exit $$rc
 
 # This repo uses its own canonical hooks directly (the same files stamped into
 # every consumer's .githooks/). Run once after cloning. Idempotent.

@@ -90,7 +90,7 @@ jobs:
   internal-refs-are-main:
     name: Internal refs are @main
     # The stamping guard: fail if any internal whuppi/ci reference on main
-    # carries a version tag. self-release stamps @main → the release tag in a
+    # carries a version tag. `make release` stamps @main → the release tag in a
     # detached commit; a stamped ref leaking back into main would freeze
     # internals forever.
     runs-on: ubuntu-24.04
@@ -111,7 +111,7 @@ jobs:
             | grep -vE '^[^:]+:[0-9]+:[[:space:]]*#' || true)
           if [ -n "$bad" ]; then
             printf '%s\n' "$bad"
-            echo "::error::internal whuppi/ci refs on main must be @main (self-release stamps tags)"
+            echo "::error::internal whuppi/ci refs on main must be @main (make release stamps tags)"
             exit 1
           fi
           ref_bad=$(grep -rn -A3 'repository: whuppi/ci' .github/workflows/ \
