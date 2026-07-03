@@ -151,7 +151,7 @@ jobs:
           fi
 
       # Resolve against the SDK pinned on current branch — what a fresh consumer builds on.
-      - uses: whuppi/ci/actions/capabilities/fvm@main
+      - uses: whuppi/ci/actions/capabilities/fvm@v1.0.5
 
       - name: Refresh lockfiles to latest in-range
         run: |
