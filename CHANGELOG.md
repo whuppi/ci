@@ -4,6 +4,18 @@ Releases are cut from the top heading here by `self-release.yml`; consumers pin
 an exact version and upgrade through grouped Dependabot PRs. Versioning rules
 live in the README. Newest first.
 
+## 1.0.2
+
+Internal only — no change to the caller / Makefile contract, so consumers get a
+no-op Dependabot bump:
+
+- Auto-release: `self-release.yml` cuts the tag on a changelog-PR merge, via a
+  `RELEASE_TOKEN` fine-grained PAT (the stamp commit edits workflow files, which
+  the default token can't push). `make release` stays as a manual fallback.
+- Deploy secrets tooling (`deploy/.deploy/secrets.sh`) for the `release`
+  environment.
+- Canonical `.gitignore` stamped.
+
 ## 1.0.1
 
 - fvm capability now runs `flutter pub get` after installing the SDK, so
