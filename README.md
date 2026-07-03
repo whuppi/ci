@@ -105,3 +105,10 @@ asset.
 
 - `docs/ARCHITECTURE.md` — how consumption, the stamping rule, the release
   model, and the first-push runbook fit together.
+- `docs/UPDATING.md` — maintenance recipes: who bumps what, adding a
+  capability, editing the release script or hooks, cutting a release.
+- `docs/MIGRATION.md` — onboarding a new package repo; MAJOR-version notes.
+- `docs/CAPABILITY_ROADMAP.md` — shared vs deliberately consumer-side, plus
+  what's planned.
+- `CONTRIBUTING.md` / `SECURITY.md` — how to change this repo safely, and the
+  supply-chain threat model.

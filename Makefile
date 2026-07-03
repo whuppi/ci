@@ -1,9 +1,15 @@
 # Local gates for the whuppi/ci repo itself. CI mirrors these in self-check.yml.
 SHELL := /usr/bin/env bash
 
-.PHONY: check lint-shell lint-actions pins-check
+.PHONY: check hooks lint-shell lint-actions pins-check
 
 check: lint-shell lint-actions
+
+# This repo uses its own canonical hooks directly (the same files stamped into
+# every consumer's .githooks/). Run once after cloning. Idempotent.
+hooks:
+	@git config core.hooksPath hooks
+	@echo "✓ git hooks active (core.hooksPath → hooks)"
 
 # Shell portability + correctness (shellcheck + bash 3.2 + BSD scans).
 lint-shell:
