@@ -64,5 +64,15 @@ jobs:
           persist-credentials: false
       - name: Stamp internal refs, tag, create the release
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: bash tool/ci/self_release.sh --discover
+          # NOT the default GITHUB_TOKEN: the stamp commit modifies
+          # .github/workflows/ files, and GITHUB_TOKEN can never carry the
+          # `workflows` scope, so its push is rejected. RELEASE_TOKEN is a
+          # fine-grained PAT scoped to THIS repo with contents + workflows
+          # read/write (see docs/UPDATING.md "Cutting a release").
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::RELEASE_TOKEN secret is missing — a fine-grained PAT (this repo, contents + workflows RW) is required to push the stamped release commit. See docs/UPDATING.md."
+            exit 1
+          fi
+          bash tool/ci/self_release.sh --discover

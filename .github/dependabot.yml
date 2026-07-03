@@ -14,3 +14,8 @@ updates:
     # third-party action gets scrutiny before it reaches a build.
     cooldown:
       default-days: 7
+    # One reviewable PR per scan, not one per directory — the same
+    # actions/cache bump otherwise lands as four separate PRs.
+    groups:
+      actions:
+        patterns: ["*"]

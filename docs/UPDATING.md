@@ -67,6 +67,11 @@ then commit each consumer's re-stamped files. Never edit a consumer's
 
 ## Cutting a release
 
+Prerequisite (one-time): a `RELEASE_TOKEN` repo secret — a fine-grained PAT
+scoped to THIS repo with **contents + workflows read/write**. The stamp commit
+modifies `.github/workflows/` files, and the default `GITHUB_TOKEN` can never
+carry the `workflows` scope, so its push is rejected.
+
 1. PR to `main` adding a new top heading to `CHANGELOG.md` (MAJOR/MINOR/PATCH
    per the README's rules) with a short summary.
 2. Merge. `self-release.yml` gates, stamps every internal `@main` →
@@ -74,7 +79,10 @@ then commit each consumer's re-stamped files. Never edit a consumer's
 3. Consumers' Dependabot opens one grouped PR each (after its cooldown); their
    own CI tests the bump before they merge.
 
-Never hand-tag `main` — the tag must point at the stamped commit.
+Never hand-tag `main` — the tag must point at the stamped commit. A release
+can also be cut from a maintainer machine (credentials with the workflow
+scope): `git checkout --detach && GITHUB_REPOSITORY=whuppi/ci bash
+tool/ci/self_release.sh --discover && git checkout main`.
 
 ## When a pinned asset breaks
 
