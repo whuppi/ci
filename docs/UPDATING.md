@@ -67,21 +67,24 @@ then commit each consumer's re-stamped files. Never edit a consumer's
 
 ## Cutting a release
 
-Releases are cut LOCALLY by the maintainer — there is no release CI workflow
-and no stored token. Why: the stamp commit edits `.github/workflows/` files,
-which GitHub forbids the CI `GITHUB_TOKEN` from pushing (a workflow can't
-rewrite itself). Running it on the maintainer's own credentials sidesteps that.
+Prerequisite (one-time): a `RELEASE_TOKEN` secret on the `release` environment —
+a fine-grained PAT scoped to THIS repo with **Contents + Workflows read/write**.
+The stamp commit edits `.github/workflows/` files, and neither `GITHUB_TOKEN`
+nor a GitHub App token can carry the `workflows` scope, so a token that has it
+is required. Stored via the deploy tooling:
+`deploy/.deploy/secrets.sh set release/RELEASE_TOKEN <pat>`.
 
 1. Merge a PR to `main` adding a new top heading to `CHANGELOG.md`
    (MAJOR/MINOR/PATCH per the README's rules) with a short summary.
-2. Run `make release`. It detaches HEAD, stamps every internal `@main` →
-   `@vX.Y.Z`, tags the stamped commit, creates the GitHub release, and returns
-   to your branch. `main` never carries the stamp.
+2. `self-release.yml` fires on the changelog push: it stamps every internal
+   `@main` → `@vX.Y.Z` in a detached commit, tags it, creates the release.
+   `main` never carries the stamp.
 3. Consumers' Dependabot opens one grouped PR each (after its cooldown); their
    own CI tests the bump before they merge.
 
-Never hand-tag `main` — the tag must point at the stamped commit (`make
-release` handles this).
+Manual fallback: `make release` cuts a release from your own machine with your
+own login (no token needed) — use it if the PAT lapses or to cut without a
+changelog push. Never hand-tag `main` — the tag must point at the stamped commit.
 
 ## When a pinned asset breaks
 

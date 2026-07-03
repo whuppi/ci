@@ -146,8 +146,12 @@ simplest correct shape.
 
 The one-time sequence when this repo goes to GitHub:
 
-1. Create `whuppi/ci` → push `main` → run `make release` locally to cut
-   `v1.0.0` from the seeded changelog heading (never hand-tag).
+1. Create `whuppi/ci` → push `main` → add the `RELEASE_TOKEN` secret to the
+   `release` environment (a fine-grained PAT for this repo, Contents +
+   Workflows RW; store it via `deploy/.deploy/secrets.sh set
+   release/RELEASE_TOKEN <pat>`). Then dispatch `self-release.yml` (or run
+   `make release` locally) to cut `v1.0.0` from the seeded changelog heading —
+   never hand-tag.
 2. Org Actions access: if the repo is private, Settings → Actions → Access →
    "Accessible from repositories in the whuppi organization" (public needs
    nothing).
@@ -157,8 +161,8 @@ The one-time sequence when this repo goes to GitHub:
    `Full Test Gate`, the pr-checks job names); run the labels workflow once
    via dispatch.
 
-Steady-state upgrade flow: bump the changelog + `make release` here → `vX.Y.Z`
-is cut → each consumer's Dependabot opens ONE grouped PR bumping every
+Steady-state upgrade flow: merge a changelog PR here → `self-release.yml`
+cuts `vX.Y.Z` → each consumer's Dependabot opens ONE grouped PR bumping every
 whuppi/ci pin → that PR's fast gate runs automatically; add `ready-to-test`
 for the full matrix when the release touches test-path behavior → merge when
 green. Consumers upgrade independently; old pins work forever.

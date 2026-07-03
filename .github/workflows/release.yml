@@ -9,7 +9,7 @@
 # the trigger (changelog push + dispatch), and provides the pub.dev credential.
 # Publish waits on the branch-named GitHub environment approval.
 #
-# Internal refs say @main; `make release` stamps them to the release tag.
+# Internal refs say @main; the release stamps them to the release tag.
 name: Release
 
 on:

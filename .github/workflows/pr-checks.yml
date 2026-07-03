@@ -41,7 +41,7 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           repository: whuppi/ci
-          ref: main   # stamped to the exact release tag by `make release`
+          ref: main   # stamped to the exact release tag by self-release.yml
           path: .whuppi-ci
           persist-credentials: false
       - name: Check PR title

@@ -63,8 +63,9 @@ as booleans:
 
 ## The version contract
 
-Releases are cut from `CHANGELOG.md` by `make release` (run locally by the
-maintainer) as immutable version tags (`v1.0.0`, `v1.1.0`…). **There is no moving major tag** — a moving tag
+Releases are cut from `CHANGELOG.md` as immutable version tags (`v1.0.0`,
+`v1.1.0`…): merge a PR that adds a new top heading and `self-release.yml` cuts
+the tag automatically (or run `make release` locally). **There is no moving major tag** — a moving tag
 would change under every consumer at once, untested. Consumers pin an exact
 version everywhere and upgrade individually: Dependabot opens one grouped PR per
 consumer bumping every `whuppi/ci` ref together, and that PR runs the consumer's
@@ -74,7 +75,7 @@ own CI before merge. An old pin keeps working forever.
 = additive (new capability/input/workflow); `PATCH` = fixes and pin bumps.
 
 Internal references (make-target → its capabilities, a reusable workflow → its
-`tool/` checkout) say `@main` on the `main` branch; `make release` stamps
+`tool/` checkout) say `@main` on the `main` branch; the release stamps
 them to the release tag in a detached release commit, so a consumer calling any
 file `@v1.2.0` gets internal refs that also resolve to `v1.2.0`. Never
 hand-write a version tag into an internal ref — `self-check.yml` fails the PR.
