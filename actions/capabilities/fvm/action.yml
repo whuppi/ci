@@ -117,8 +117,9 @@ runs:
         # literal echo. GITHUB_PATH reaches only later steps, so set PATH here too.
         export PATH="$DEST:$PATH"
 
-        # Point fvm at its SDK cache for every later step. Heredoc with a
-        # random delimiter so a newline in $HOME can't inject extra entries.
+        # Point fvm at its SDK cache for every later step. Heredoc form (not
+        # KEY=VALUE) so a newline in $HOME can't inject extra entries; the
+        # delimiter is a static literal, safe because $HOME is runner-controlled.
         FVM_CACHE="$HOME/.fvm_cache"
         export FVM_CACHE_PATH="$FVM_CACHE"
         {
@@ -133,8 +134,9 @@ runs:
         # different roots" for any plugin carrying Kotlin sources (file_picker,
         # etc.) — flutter/flutter#105395, #88234, #136160. Pin the cache to the
         # workspace drive so plugin sources and build output share one root.
-        # RUNNER_TEMP is runner-controlled; random-delimiter heredoc so a path
-        # newline can't inject extra entries.
+        # Heredoc form (not KEY=VALUE) so a path newline can't inject extra
+        # entries; the delimiter is a static literal, safe because RUNNER_TEMP
+        # is runner-controlled.
         if [[ "$OS" == "windows" ]]; then
           WIN_PUB_CACHE="$RUNNER_TEMP/pub-cache"
           mkdir -p "$WIN_PUB_CACHE"
