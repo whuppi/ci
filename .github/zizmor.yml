@@ -4,7 +4,7 @@
 # blanket policy — enforced for every `actions/*`, `dorny/*`, etc. ref).
 # First-party whuppi/ci refs are the exception: they say @main on this branch
 # and are stamped to the exact release tag at release time (see
-# tool/ci/self_release.sh), so the tag IS the pin. A ref-pin policy accepts
+# tool/ci/release.sh's release_stamp_tree hook), so the tag IS the pin. A ref-pin policy accepts
 # the @main / @vX.Y.Z ref without demanding a SHA that the stamping would
 # have to rewrite anyway.
 rules:

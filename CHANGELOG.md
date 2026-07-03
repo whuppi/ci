@@ -4,6 +4,23 @@ Releases are cut from the top heading here by `self-release.yml`; consumers pin
 an exact version and upgrade through grouped Dependabot PRs. Versioning rules
 live in the README. Newest first.
 
+## 1.0.3
+
+Internal only — no change to the caller / Makefile contract, so consumers get
+a no-op Dependabot bump:
+
+- ci now releases itself through the shared `release.sh` (the same engine
+  consumers run via the release-tool action); `self_release.sh` is deleted.
+  The internal-ref freeze became the `release_stamp_tree` hook in
+  `tool/ci/release_hooks.sh` — the same per-repo extension mechanism
+  pdf_manipulator uses for asset hashing. ci release notes now carry the same
+  commits-since-last-release collapsible as every consumer release.
+- `release.sh`: `release_stamp_tree` hook point in `--discover`; runs on
+  repos without a `pubspec.yaml` (title falls back to the repo slug, version
+  stamp skips, pub.dev-only modes refuse); the `main` branch maps to the
+  stable changelog lane; release commits use a per-commit bot identity
+  (`git -c`) instead of persisting it into the repo config.
+
 ## 1.0.2
 
 Internal only — no change to the caller / Makefile contract, so consumers get a
