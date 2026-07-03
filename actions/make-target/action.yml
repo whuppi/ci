@@ -71,39 +71,39 @@ runs:
   using: composite
   steps:
     # ── Always ──
-    - uses: whuppi/ci/actions/capabilities/fvm@main
+    - uses: whuppi/ci/actions/capabilities/fvm@v1.0.3
 
     # ── On demand ──
-    - uses: whuppi/ci/actions/capabilities/free-disk-space@main
+    - uses: whuppi/ci/actions/capabilities/free-disk-space@v1.0.3
       if: inputs.free-disk == 'true'
 
-    - uses: whuppi/ci/actions/capabilities/java@main
+    - uses: whuppi/ci/actions/capabilities/java@v1.0.3
       if: inputs.java == 'true'
 
-    - uses: whuppi/ci/actions/capabilities/chrome@main
+    - uses: whuppi/ci/actions/capabilities/chrome@v1.0.3
       if: inputs.chrome == 'true'
 
-    - uses: whuppi/ci/actions/capabilities/headless-display@main
+    - uses: whuppi/ci/actions/capabilities/headless-display@v1.0.3
       if: inputs.headless-display == 'true'
 
-    - uses: whuppi/ci/actions/capabilities/hw-accel@main
+    - uses: whuppi/ci/actions/capabilities/hw-accel@v1.0.3
       if: inputs.hw-accel == 'true'
 
-    - uses: whuppi/ci/actions/capabilities/gradle-cache@main
+    - uses: whuppi/ci/actions/capabilities/gradle-cache@v1.0.3
       if: inputs.gradle-cache == 'true'
       with:
         phase: restore
 
-    - uses: whuppi/ci/actions/capabilities/xcode-cache@main
+    - uses: whuppi/ci/actions/capabilities/xcode-cache@v1.0.3
       if: inputs.xcode-cache == 'true'
       with:
         target: ${{ inputs.xcode-cache-target }}
         key-extra: ${{ inputs.xcode-key-extra }}
 
-    - uses: whuppi/ci/actions/capabilities/pods-cache@main
+    - uses: whuppi/ci/actions/capabilities/pods-cache@v1.0.3
       if: inputs.pods-cache == 'true'
 
-    - uses: whuppi/ci/actions/capabilities/ios-simulator@main
+    - uses: whuppi/ci/actions/capabilities/ios-simulator@v1.0.3
       if: inputs.simulator == 'true'
 
     # ── Run ──
@@ -141,13 +141,13 @@ runs:
 
     # Emulator path — the SAME script, executed inside the live emulator
     # by the capability's teardown-watchdog wrapper.
-    - uses: whuppi/ci/actions/capabilities/android-emulator@main
+    - uses: whuppi/ci/actions/capabilities/android-emulator@v1.0.3
       if: inputs.emulator == 'true'
       with:
         script: /tmp/make-run.sh "${{ inputs.make-target }}"
         report-json: ${{ inputs.report-json }}
 
-    - uses: whuppi/ci/actions/capabilities/gradle-cache@main
+    - uses: whuppi/ci/actions/capabilities/gradle-cache@v1.0.3
       if: always() && inputs.gradle-cache == 'true'
       with:
         phase: save
