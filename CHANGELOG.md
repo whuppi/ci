@@ -15,6 +15,11 @@ no-op Dependabot bump:
 - Deploy secrets tooling (`deploy/.deploy/secrets.sh`) for the `release`
   environment.
 - Canonical `.gitignore` stamped.
+- Release stamp is now block-aware: every `whuppi/ci` checkout `ref` is frozen
+  to the tag (previously a checkout missing a marker comment could leak
+  `ref: main` into the release — a consumer's pinned `pr-checks` then pulled
+  `main`'s tool scripts). The stamp self-verifies no `@main` / `ref: main`
+  survives.
 
 ## 1.0.1
 
