@@ -87,9 +87,9 @@ jobs:
           PR_BODY="$(cat <<'EOF'
           Supply-chain pin bump — review the recomputed hashes in the diff:
 
-          - **tools + binaries + the zizmor + actionlint gate pins**
-            (`tool/versions.env`) — sha256s recomputed from the upstream release
-            assets, re-verified by `fetch_verified` on every build.
+          - **Pinned tools + binaries in `tool/versions.env`**: sha256s
+            recomputed from the upstream release assets, re-verified by
+            `fetch_verified` on every build. See the diff for which moved.
 
           These pins are consumed by every whuppi/ci consumer. The already-pinned
           assets were re-hashed before this bump (repoint alarm). Merge once

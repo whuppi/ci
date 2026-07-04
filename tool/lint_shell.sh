@@ -23,9 +23,8 @@
 # comment (grep can't tell code from comment) — name it, as this header does.
 set -uo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-# shellcheck source=tool/lib.sh
-source "$SCRIPT_DIR/lib.sh"
+# Self-contained: no lib.sh source (this gate uses none of its helpers), so it
+# stamps into any package's tool/ without dragging a lib.sh along.
 # Lints the git repo at the CURRENT directory — cd into the repo to lint first.
 git rev-parse --show-toplevel >/dev/null 2>&1 || { echo "lint_shell: run inside a git repo" >&2; exit 2; }
 

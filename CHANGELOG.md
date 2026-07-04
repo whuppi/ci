@@ -4,6 +4,22 @@ Releases are cut from the top heading here by `self-release.yml`; consumers pin
 an exact version and upgrade through grouped Dependabot PRs. Versioning rules
 live in the README. Newest first.
 
+## 1.0.7
+
+Additive + internal — a new shared script plus two internal cleanups, no change
+to any existing action or workflow contract, so a consumer already pinned gets
+a no-op Dependabot bump until it adopts the script:
+
+- Added `tool/platforms_gate.sh`, the shared pub.dev platform-support gate:
+  runs pana pinned to `PANA_VERSION` on a lean snapshot and fails if any
+  expected platform drops. Packages stamp it into their own `tool/` and call it
+  from `make platforms`, so the gate stops being reimplemented per repo.
+- `tool/lint_shell.sh` no longer sources `lib.sh` (it used none of its helpers)
+  — self-contained now, so it stamps into a package cleanly without dragging
+  `lib.sh` along.
+- `self-upgrade.yml`: the pin-bump PR body no longer names specific assets
+  (which over-claimed when only one moved); it points at the diff instead.
+
 ## 1.0.6
 
 Additive — a new shared script, no change to any existing action or workflow
