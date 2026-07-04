@@ -4,6 +4,19 @@ Releases are cut from the top heading here by `self-release.yml`; consumers pin
 an exact version and upgrade through grouped Dependabot PRs. Versioning rules
 live in the README. Newest first.
 
+## 1.0.6
+
+Additive — a new shared script, no change to any existing action or workflow
+contract, so a consumer already pinned gets a no-op Dependabot bump until it
+adopts the script:
+
+- Added `tool/analyze_core.sh`, the shared Dart static-analysis gate: a
+  suppression-comment ban plus `dart analyze --fatal-infos` over the package's
+  source and its example. Packages stamp it verbatim into their own `tool/`
+  and call it from `make analyze`, so analyzer strictness — an INFO like
+  `deprecated_member_use` failing the build the same as an error — can never
+  drift between consumers again.
+
 ## 1.0.5
 
 Internal fix — no change to the caller / Makefile contract, so consumers get a
