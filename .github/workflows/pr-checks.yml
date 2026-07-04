@@ -158,3 +158,25 @@ jobs:
         if: inputs.shell-lint
         shell: bash
         run: bash .whuppi-ci/tool/lint_shell.sh
+      # A stamped gate is a COPY — edited only at the canonical in whuppi/ci and
+      # re-stamped, never in the consumer. Fail a PR whose copy drifted from the
+      # pinned canonical (.whuppi-ci is checked out at the version this repo
+      # pins). The manifest names exactly which tool/ files must byte-match.
+      # Skipped on whuppi/ci itself — the canonical can't drift from itself.
+      - name: stamped gates match whuppi/ci canonical
+        if: github.repository != 'whuppi/ci'
+        shell: bash
+        run: |
+          manifest=.whuppi-ci/tool/stamped-files.txt
+          [ -f "$manifest" ] || { echo "no stamped-files manifest — skipping"; exit 0; }
+          rc=0
+          while IFS= read -r f; do
+            case "$f" in ''|\#*) continue ;; esac
+            [ -f "tool/$f" ] || continue   # a consumer may not carry every gate
+            if ! diff -q ".whuppi-ci/tool/$f" "tool/$f" >/dev/null 2>&1; then
+              echo "::error file=tool/$f::tool/$f drifted from whuppi/ci — do not edit a stamped copy; edit the canonical + re-stamp"
+              rc=1
+            fi
+          done < "$manifest"
+          [ "$rc" -eq 0 ] && echo "✓ stamped gates match whuppi/ci"
+          exit "$rc"

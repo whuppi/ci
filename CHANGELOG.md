@@ -4,6 +4,23 @@ Releases are cut from the top heading here by `self-release.yml`; consumers pin
 an exact version and upgrade through grouped Dependabot PRs. Versioning rules
 live in the README. Newest first.
 
+## 1.0.8
+
+Hardens the stamp quadrant — the one place local-shared files can drift, and
+where this cluster's mistakes came from:
+
+- Added `tool/stamped-files.txt`, the manifest of tool/ gates stamped verbatim
+  into consumers (analyze_core, lint_shell, platforms_gate) — the single source
+  of truth for "what is stamped", read by the workspace stamper and the guard
+  below.
+- pr-checks' workflow-lint now fails a consumer PR whose stamped gate drifted
+  from the whuppi/ci version it pins. Content drift is caught in CI, not by
+  hand. Skipped on whuppi/ci itself (the canonical can't drift from itself). On
+  adopting this version a consumer must re-stamp its gates, or the check flags
+  the mismatch.
+- The three stamped gates now carry one standardized `do not edit` header naming
+  the canonical and the re-stamp rule.
+
 ## 1.0.7
 
 Additive + internal — a new shared script plus two internal cleanups, no change
