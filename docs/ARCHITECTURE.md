@@ -46,7 +46,7 @@ Discipline for the stamp quadrant — file-copy stamping, the only drift-prone o
 hooks, and commit-types into each repo; distinct from the release-time
 internal-ref stamping in *The versioned-release model*):
 - The canonical copy lives here; the stamped copy in a consumer is never authored
-  there — it carries a `# GENERATED from whuppi/ci — do not edit` header.
+  there — it carries a do-not-edit header naming the canonical and the re-stamp rule.
 - One workspace stamper is the single writer; a consistency guard fails a PR
   whose whuppi/ci refs or stamped copies have drifted.
 - Prefer reference over stamp: stamp only when it MUST run locally. If it's
@@ -60,8 +60,8 @@ internal-ref stamping in *The versioned-release model*):
    copies that diverge silently. Per-repo doesn't kill drift — it hides it. The
    hardening that makes stamping safe (and would have caught every stamp mistake
    this session):
-   - every stamped file carries a `# GENERATED from whuppi/ci — do not edit`
-     header;
+   - every stamped file carries a do-not-edit header naming the canonical and
+     the re-stamp rule;
    - `tool/stamped-files.txt` is the manifest of what's stamped — the workspace
      stamper and the drift guard both read it, so neither can disagree about the
      set;
