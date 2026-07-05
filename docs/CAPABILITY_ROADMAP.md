@@ -27,7 +27,7 @@ planned. Statuses: **DONE** · **PLANNED** · **WONT_DO** (with reason).
 | Shared release script runner | DONE | `release-tool` — action-cache execution, Dependabot-bumpable |
 | Full-test row gating | DONE | `matrix-filter` |
 | SSH debugging tunnel | DONE | `debug-ssh` (bore, key-only) |
-| Rust / WASM build capabilities | WONT_DO | Package-specific native machinery stays in the package (pdf_manipulator keeps rust, wasm-build, wasm-cache) |
+| Rust / WASM build capabilities in shared make-target | PLANNED | Deferred — pdf's fork keeps rust/wasm-build/wasm-cache local until a 2nd Rust package makes Rust a shared concern; folds into make-target then (deleting the fork), gated on a green macos-intel matrix (a delegating-wrapper attempt regressed that runner). See ARCHITECTURE's decided boundary calls. |
 
 ## Supply chain + release model
 

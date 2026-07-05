@@ -74,11 +74,10 @@ own CI before merge. An old pin keeps working forever.
 `MAJOR` = a consumer must change its caller stubs or Makefile contract; `MINOR`
 = additive (new capability/input/workflow); `PATCH` = fixes and pin bumps.
 
-Internal references (make-target → its capabilities, a reusable workflow → its
-`tool/` checkout) say `@main` on the `main` branch; the release stamps
-them to the release tag in a detached release commit, so a consumer calling any
-file `@v1.2.0` gets internal refs that also resolve to `v1.2.0`. Never
-hand-write a version tag into an internal ref — `self-check.yml` fails the PR.
+Pinning `@v1.2.0` is fully self-consistent: whuppi/ci's own internal refs are
+stamped to the same tag at release, so nothing resolves to a stray version. How
+that stamping works is a maintainer detail — see
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ## Pins ownership
 
@@ -104,8 +103,9 @@ asset.
 
 ## Docs
 
-- `docs/ARCHITECTURE.md` — how consumption, the stamping rule, the release
-  model, and the first-push runbook fit together.
+- `docs/ARCHITECTURE.md` — the where-each-thing-lives map (local vs CI-only vs
+  shared vs specific), how consumption, the stamping rule, the release model,
+  and the first-push runbook fit together.
 - `docs/UPDATING.md` — maintenance recipes: who bumps what, adding a
   capability, editing the release script or hooks, cutting a release.
 - `docs/CAPABILITY_ROADMAP.md` — shared vs deliberately consumer-side, plus

@@ -4,6 +4,79 @@ How the shared CI is put together. For the consumer-facing surface see the
 README. (This repo was generalized from pdf_manipulator's battle-tested CI;
 that history lives in git, not in a doc.)
 
+## Where each thing lives — the map
+
+Everything in a consumer repo answers to one question, and the answer forces
+both where it sits and how it's shared:
+
+> **Does a human run this locally, or does only CI run it?**
+
+```
+                 RUN LOCALLY (via make)          CI-ONLY
+                 ──────────────────────          ─────────────────────
+ SHARED          stamped .sh                     referenced @v
+ (whuppi/ci       analyze_core, lint_shell,       reusable workflows,
+  is the truth)   platforms_gate                  make-target, capabilities,
+                  copied into each repo →          release-tool, matrix-filter
+                  CAN drift; needs a guard         uses: whuppi/ci/…@v; can't drift
+
+ SPECIFIC        owned tool/*.sh + Makefile       owned .github/workflows +
+ (the repo        the build, tests, fixtures      tool/ci/*.sh (release_hooks,
+  is the truth)                                    the upgrade radar, reconcilers)
+```
+
+- **CI-only + shared → reference `@v`.** GitHub delivers it; nothing is copied,
+  so it can't drift. This is most of whuppi/ci and where it earns its keep
+  (elaborated in *Two consumption mechanisms* and *The release surface*).
+- **Local + shared → stamp.** A `make` target can't call a reusable workflow, so
+  a locally-runnable shared gate has to be a real file in the repo, copied from
+  the canonical one here. The ONE quadrant that can drift.
+- **Specific → own it** (enumerated in *What stays consumer-side*).
+
+The naming boundary is load-bearing:
+- **`tool/*.sh`** — a human runs it via a `make` target; CI runs the same target.
+- **`tool/ci/*.sh`** — CI-only; never run by hand (release_hooks, the upgrade
+  radar, the emulator reconciler). May `source` a `tool/*.sh`, but is not a gate.
+
+The folder is the line: never wire a `tool/ci/*.sh` into a `make` gate, and never
+drop a CI-only helper into `tool/` root.
+
+Discipline for the stamp quadrant — file-copy stamping, the only drift-prone one
+(the workspace stampers copy analyze_core / lint_shell / platforms_gate, the git
+hooks, and commit-types into each repo; distinct from the release-time
+internal-ref stamping in *The versioned-release model*):
+- The canonical copy lives here; the stamped copy in a consumer is never authored
+  there — it carries a do-not-edit header naming the canonical and the re-stamp rule.
+- One workspace stamper is the single writer; a consistency guard fails a PR
+  whose whuppi/ci refs or stamped copies have drifted.
+- Prefer reference over stamp: stamp only when it MUST run locally. If it's
+  CI-only, make it a workflow or action and reference `@v`.
+
+### Two boundary calls — decided
+
+1. **The stamped local gates stay stamped, hardened.** analyze_core, lint_shell,
+   and platforms_gate are genuinely identical across consumers and evolve
+   occasionally, so one canonical source guarded against drift beats N per-repo
+   copies that diverge silently. Per-repo doesn't kill drift — it hides it. The
+   hardening that makes stamping safe (and would have caught every stamp mistake
+   this session):
+   - every stamped file carries a do-not-edit header naming the canonical and
+     the re-stamp rule;
+   - `tool/stamped-files.txt` is the manifest of what's stamped — the workspace
+     stamper and the drift guard both read it, so neither can disagree about the
+     set;
+   - the shared pr-checks lint fails any consumer PR whose stamped copy differs
+     from the whuppi/ci canonical it pins. Content drift is now caught in CI, not
+     discovered by hand.
+2. **pdf's make-target fork stays, for now.** It works, and its only real flaw —
+   drift — is fixed (one whuppi/ci ref instead of a dozen, plus the
+   version-consistency guard). Folding Rust into the shared make-target as a
+   first-class capability toggle (deleting the fork) is the right end state, but
+   it is built only WHEN a second Rust package makes Rust a shared concern, and
+   merged only after a green macos-intel matrix run proven more than once — a
+   delegating-wrapper attempt regressed that runner this session and the
+   mechanism was never fully pinned.
+
 ## Two consumption mechanisms
 
 **Reusable workflows** (`workflow_call`). A consumer's workflow file is a thin
