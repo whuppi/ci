@@ -4,6 +4,26 @@ Releases are cut from the top heading here by `self-release.yml`; consumers pin
 an exact version and upgrade through grouped Dependabot PRs. Versioning rules
 live in the README. Newest first.
 
+## 2.0.0
+
+Two gate changes. **MAJOR**: a consumer must update its Makefile to adopt.
+
+- Added `tool/verify_web_gate.sh`, the shared dual-compiler web gate. It compiles
+  a consumer's example under both `flutter build web` (dart2js) and `--wasm`
+  (dart2wasm). The two compilers have different type models, so js-interop code
+  dart2js accepts (a non-exhaustive JSAny switch, an unsound interop cast)
+  dart2wasm can reject, and nothing else in the toolchain compiles wasm (the
+  analyzer and dart2js use the JS model; pana's wasm tag is an import heuristic).
+  A JS-only build is a false green. Registered in `stamped-files.txt`.
+- The stamped gates no longer default their SDK/config env vars. A
+  `${VAR:-fvm dart}` fallback silently diverges a laptop from CI, so
+  `analyze_core`, `platforms_gate`, and `verify_web_gate` now require
+  `DART` / `FLUTTER` / `EXPECTED_PLATFORMS` and fail loud if unset. The one
+  default lives in the consumer's Makefile, which passes them explicitly.
+
+Adopting: re-stamp all gates, pass `EXPECTED_PLATFORMS` from `make platforms`,
+and wire `make verify-web` to the new gate.
+
 ## 1.0.8
 
 Hardens the stamp quadrant — the one place local-shared files can drift, and
