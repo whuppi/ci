@@ -4,6 +4,15 @@ Releases are cut from the top heading here by `self-release.yml`; consumers pin
 an exact version and upgrade through grouped Dependabot PRs. Versioning rules
 live in the README. Newest first.
 
+## 2.0.3
+
+- The 2.0.2 mention escape didn't actually work: GitHub decodes HTML
+  entities before scanning release notes for mentions, so `&#64;immutable`
+  still credited the `immutable` org as a release contributor. Commit-list
+  `@word` tokens are now wrapped in code spans instead — GitHub never
+  mention-parses code — which also reads better, since these tokens are
+  code annotations in the first place.
+
 ## 2.0.2
 
 - Release notes no longer mention-bomb strangers. The auto-generated commits
