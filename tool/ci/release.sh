@@ -405,7 +405,10 @@ commits_collapsible() {
 
   local count list
   count=$(grep -c . <<< "$commits" || true)
-  list=$(sed 's/^/- /' <<< "$commits")
+  # Escape @ as &#64; — renders identically, but a bare @word in a commit
+  # subject (@immutable, @override, ...) becomes a GitHub mention in the
+  # notes and credits that random account as a release contributor.
+  list=$(sed -e 's/@/\&#64;/g' -e 's/^/- /' <<< "$commits")
   printf '<details><summary>Commits since %s (%s)</summary>\n\n%s\n\n</details>\n' \
     "${from:-initial}" "$count" "$list"
 }
