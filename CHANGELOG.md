@@ -4,6 +4,17 @@ Releases are cut from the top heading here by `self-release.yml`; consumers pin
 an exact version and upgrade through grouped Dependabot PRs. Versioning rules
 live in the README. Newest first.
 
+## 2.0.1
+
+- Fixed the `release-tool` action swallowing every output release.sh writes.
+  The v2.0.0 move from a workspace checkout to a composite action lost the
+  output plumbing: composite actions only expose inner-step outputs through an
+  explicit `outputs:` mapping, and the action had none. The gate would decide
+  `should_run=true`, the caller's `steps.<id>.outputs.should_run` read back
+  empty, and every downstream job (discover, git-install-note, publish)
+  skipped — a release run that goes green while releasing nothing. The action
+  now maps `should_run`, `version`, `tag`, and `has_release` outward.
+
 ## 2.0.0
 
 Two gate changes. **MAJOR**: a consumer must update its Makefile to adopt.
