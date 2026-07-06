@@ -405,10 +405,12 @@ commits_collapsible() {
 
   local count list
   count=$(grep -c . <<< "$commits" || true)
-  # Escape @ as &#64; — renders identically, but a bare @word in a commit
-  # subject (@immutable, @override, ...) becomes a GitHub mention in the
-  # notes and credits that random account as a release contributor.
-  list=$(sed -e 's/@/\&#64;/g' -e 's/^/- /' <<< "$commits")
+  # Wrap @word in a code span — a bare @word in a commit subject
+  # (@immutable, @override, ...) becomes a GitHub mention in the notes and
+  # credits that random account as a release contributor. Entity-escaping
+  # (&#64;) does NOT prevent this: GitHub decodes entities before scanning
+  # for mentions. Code spans are never mention-parsed.
+  list=$(sed -e 's/@\([A-Za-z0-9][A-Za-z0-9-]*\)/`@\1`/g' -e 's/^/- /' <<< "$commits")
   printf '<details><summary>Commits since %s (%s)</summary>\n\n%s\n\n</details>\n' \
     "${from:-initial}" "$count" "$list"
 }
