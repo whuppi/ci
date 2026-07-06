@@ -17,19 +17,19 @@
 # in a user's build.
 #
 # Env:
-#   FLUTTER       Flutter command   (default: fvm flutter)
-#   EXAMPLE_DIR   example dir        (default: example)
-# Run from the package root; builds $EXAMPLE_DIR under both compilers.
+#   FLUTTER   Flutter command — REQUIRED, no fallback. The caller (the Makefile
+#             target) passes it; a missing one fails loud, never guesses.
+# The example dir is fixed at "example" (the Flutter package convention).
+# Run from the package root; builds example/ under both compilers.
 # ────────────────────────────────────────────────────────────────────
 set -euo pipefail
+
+: "${FLUTTER:?verify_web_gate: FLUTTER must be set by the caller, e.g. fvm flutter}"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PKG_ROOT="$(dirname "$SCRIPT_DIR")"
 
-FLUTTER="${FLUTTER:-fvm flutter}"
-EXAMPLE_DIR="${EXAMPLE_DIR:-example}"
-
-cd "$PKG_ROOT/$EXAMPLE_DIR"
+cd "$PKG_ROOT/example"
 
 echo "verify_web_gate: dart2js   — $FLUTTER build web"
 # FLUTTER is intentionally word-split (e.g. "fvm flutter").
