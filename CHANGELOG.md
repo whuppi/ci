@@ -4,6 +4,15 @@ Releases are cut from the top heading here by `self-release.yml`; consumers pin
 an exact version and upgrade through grouped Dependabot PRs. Versioning rules
 live in the README. Newest first.
 
+## 2.0.2
+
+- Release notes no longer mention-bomb strangers. The auto-generated commits
+  collapsible embedded commit subjects verbatim, so a subject containing a
+  bare `@word` (`@immutable`, `@override`, ...) became a GitHub mention and
+  credited that account as a release contributor — device_io's first release
+  listed the `immutable` org. Commit-list `@`s are now escaped as `&#64;`,
+  which renders the same and mentions nobody.
+
 ## 2.0.1
 
 - Fixed the `release-tool` action swallowing every output release.sh writes.
