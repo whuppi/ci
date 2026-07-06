@@ -216,9 +216,30 @@ lane_changelog_file() {
 
 # Fetch every published version of the package from pub.dev.
 get_published_versions() {
-  curl -sS --retry 3 --retry-delay 2 --connect-timeout 10 --max-time 30 "https://pub.dev/api/packages/$PKG_NAME" 2>/dev/null \
-    | jq -r '.versions[].version // empty' 2>/dev/null \
+  # 404 means the package has never been published — a first release has
+  # zero published versions, not an error. Any other non-200 (pub.dev
+  # down, rate limit) fails loudly: treating it as "nothing published"
+  # would silently fold real published versions into the unpublished
+  # collapsible of the changelog being built.
+  local body status
+  body=$(mktemp)
+  status=$(curl -sS --retry 3 --retry-delay 2 --connect-timeout 10 --max-time 30 \
+    -o "$body" -w '%{http_code}' \
+    "https://pub.dev/api/packages/$PKG_NAME" 2>/dev/null) || status=000
+  if [ "$status" = "404" ]; then
+    rm -f "$body"
+    return 0
+  fi
+  if [ "$status" != "200" ]; then
+    rm -f "$body"
+    echo "get_published_versions: pub.dev returned HTTP $status for $PKG_NAME" >&2
+    return 1
+  fi
+  jq -r '.versions[].version // empty' "$body" \
     | sort -t. -k1,1n -k2,2n -k3,3n
+  local rc=$?
+  rm -f "$body"
+  return $rc
 }
 
 # Stamp a version string into pubspec.yaml, version.dart, and README.md.
