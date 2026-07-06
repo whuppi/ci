@@ -4,6 +4,17 @@ Releases are cut from the top heading here by `self-release.yml`; consumers pin
 an exact version and upgrade through grouped Dependabot PRs. Versioning rules
 live in the README. Newest first.
 
+## 2.0.4
+
+- Fixed `--stamp-changelog` crashing on a package's first-ever release.
+  `get_published_versions` piped pub.dev's response straight into jq; for a
+  never-published package pub.dev returns 404 with an XML body, jq exits 5,
+  and pipefail killed the publish job (device_io's first publish). A 404 now
+  means "zero published versions" — the legitimate first-release state —
+  while any other non-200 still fails loudly, since treating pub.dev
+  downtime as "nothing published" would misfile real published versions
+  under the unpublished collapsible.
+
 ## 2.0.3
 
 - The 2.0.2 mention escape didn't actually work: GitHub decodes HTML
