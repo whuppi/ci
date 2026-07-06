@@ -8,3 +8,4 @@
 analyze_core.sh
 lint_shell.sh
 platforms_gate.sh
+verify_web_gate.sh

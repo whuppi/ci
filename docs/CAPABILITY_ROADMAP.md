@@ -38,6 +38,8 @@ planned. Statuses: **DONE** · **PLANNED** · **WONT_DO** (with reason).
 | Immutable versioned releases with internal-ref stamping | DONE | `self-release.yml` (auto) runs the shared `release.sh` + the `release_stamp_tree` hook (`release_hooks.sh`); `make release` manual fallback; guarded by self-check |
 | Grouped consumer upgrade PRs | DONE | each consumer's Dependabot `whuppi-ci` group (pattern `whuppi/ci*`) |
 | Canonical git hooks + commit-types, stamped to consumers | DONE | `hooks/` + the workspace stamp-hooks script |
+| Stamped gates, drift-guarded to consumers | DONE | `tool/*.sh` in `stamped-files.txt` (`analyze_core`, `lint_shell`, `platforms_gate`, `verify_web_gate`); pr-checks fails a consumer whose stamped copy drifts from the pinned version |
+| Dual-compiler web gate (dart2js + dart2wasm) | DONE | `verify_web_gate.sh`; a consumer's `verify-web` compiles the example under both, so a wasm-only break (non-exhaustive JSAny switch, unsound interop `as`) fails at PR time — pana's wasm tag is an import heuristic, not a compile |
 | Moving major tag (`@v1`) | WONT_DO | A moving tag updates every consumer at once, untested — the exact failure the versioned model exists to prevent |
 
 ## Planned
