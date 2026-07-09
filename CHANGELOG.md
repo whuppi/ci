@@ -4,6 +4,13 @@ Releases are cut from the top heading here by `self-release.yml`; consumers pin
 an exact version and upgrade through grouped Dependabot PRs. Versioning rules
 live in the README. Newest first.
 
+## 2.0.5
+
+- Bumped the Chrome-for-testing pin to 150.0.7871.115 (with chromedriver),
+  sha256s recomputed from the upstream release assets and re-verified by
+  `fetch_verified`. The CDN prunes old versions, so consumers on the stale
+  pin would start 404ing on web-test downloads.
+
 ## 2.0.4
 
 - Fixed `--stamp-changelog` crashing on a package's first-ever release.
