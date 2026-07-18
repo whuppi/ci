@@ -88,7 +88,7 @@ runs:
         runner.os != 'Windows' &&
         inputs.avd-cache == 'true' &&
         steps.avd-cache.outputs.cache-hit != 'true'
-      uses: reactivecircus/android-emulator-runner@e89f39f1abbbd05b1113a29cf4db69e7540cae5a # v2.37.0
+      uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
       with:
         api-level: ${{ inputs.api-level }}
         arch: x86_64
@@ -263,7 +263,7 @@ runs:
     # -no-snapshot: cold-boot, ignore snapshot entirely (cold-boot input).
     - name: Boot + run (Linux/macOS)
       if: runner.os != 'Windows'
-      uses: reactivecircus/android-emulator-runner@e89f39f1abbbd05b1113a29cf4db69e7540cae5a # v2.37.0
+      uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
       with:
         api-level: ${{ inputs.api-level }}
         arch: x86_64
