@@ -11,22 +11,21 @@ consumer onboarding.
 | Thing | Bumped by | You do |
 |---|---|---|
 | Tool/binary pins (`tool/versions.env`) | `self-upgrade.yml` daily PR | Review the hashes, merge, cut a release |
-| Third-party action SHAs (workflow files) | Dependabot (7-day cooldown) | Review, merge, cut a release |
-| Consumers' Flutter SDK + lockfiles | reusable `upgrade-check.yml` in each consumer | Nothing here |
-| Consumers' whuppi/ci pins | reusable `upgrade-check.yml` → `whuppi-ci-refs` job — sweeps every ref (workflow **and** composite) to the latest release | Cut the release; consumers sweep to it automatically |
+| Consumer deps + every action `uses:` ref — pub, **and workflows AND composite `action.yml`** (third-party + whuppi/ci) | **Renovate** (`renovate.yml` reusable, one thin wrapper per consumer) | Review + merge the bump PRs it opens |
+| Consumers' Flutter SDK + lockfiles, pre-Renovate | reusable `upgrade-check.yml` — for consumers not yet migrated to Renovate | Nothing here |
 
-**Why the whuppi/ci sweep isn't Dependabot's job.** Dependabot's github-actions
-updater never touches `uses:` refs inside composite `action.yml`
+**Why Renovate, not Dependabot.** Dependabot's github-actions updater never reads
+`uses:` refs inside composite `action.yml`
 ([dependabot/dependabot-core#6704](https://github.com/dependabot/dependabot-core/issues/6704),
-open). A consumer's vendored `make-target/action.yml` pins the whuppi/ci
-capability refs there, so a grouped Dependabot bump moves only the workflow-level
-refs and splits the pin — which the `pin-availability` gate then rejects. The
-`whuppi-ci-refs` job `sed`-sweeps every versioned whuppi/ci ref, workflow and
-composite alike, to the latest release, keeping the pin uniform by construction.
-Consumers therefore drop `whuppi/ci*` from their Dependabot `github-actions`
-group. (The same #6704 gap applies to any third-party SHA we ever pin inside our
-OWN composite actions — keep third-party pins in workflow files where Dependabot
-can see them.)
+open) — a consumer's vendored `make-target/action.yml`, and any third-party action
+pinned inside a composite, is invisible to it. A grouped bump moves only the
+workflow-level refs and splits the pin, which the `pin-availability` gate then
+rejects. Renovate reads composite `action.yml`, so it keeps every whuppi/ci ref
+uniform (workflow and composite alike) and bumps the third-party actions hidden in
+composites. Each consumer runs `renovate.yml` (a thin wrapper calling the reusable,
+same shape as this one) and drops its Dependabot `github-actions` + `pub` config
+once migrated. The token is a whuppi org secret (`RENOVATE_TOKEN`); Renovate must
+write `.github/workflows/`, which `GITHUB_TOKEN` can't.
 
 A pin bump merged to `main` reaches nobody until a release is cut — merging
 and releasing are separate, deliberate steps.
