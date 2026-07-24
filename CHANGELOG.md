@@ -4,6 +4,26 @@ Releases are cut from the top heading here by `self-release.yml`; consumers pin
 an exact version and upgrade through grouped Dependabot PRs. Versioning rules
 live in the README. Newest first.
 
+## 2.3.0
+
+- Reverted Renovate (added in 2.2.0). Deleted the reusable `renovate.yml`. The
+  self-hosted Renovate machine — a dashboard issue, a per-consumer `renovate.json5`,
+  a status-check/token-scope surface — was far more than the one gap that
+  actually bit us: composite `action.yml` refs Dependabot can't see
+  ([dependabot-core#6704](https://github.com/dependabot/dependabot-core/issues/6704)).
+- Closed that gap in the existing radar instead. New opt-in `composite-refs` job
+  in the reusable `upgrade-check.yml`: sweeps every whuppi/ci ref across `.github`
+  (workflows AND composites) to the latest release — uniform, so the pin never
+  splits — and pins third-party actions inside composites to the latest SHA via
+  `pinact`. Dependabot keeps pub deps + third-party actions in workflow files;
+  the two never overlap. A consumer opts in with `sweepActions: true` +
+  `CI_ACTIONS_TOKEN` and adds `whuppi/ci*` to its Dependabot `ignore`.
+- Added `pinact` to the pinned tool supply chain (`PINACT_VERSION`), owned by
+  `self-upgrade.yml` like actionlint/zizmor.
+- Renamed the org secret `RENOVATE_TOKEN` → `CI_ACTIONS_TOKEN` (same
+  Workflows-scope PAT; `GITHUB_TOKEN` still can't write `.github/workflows/`).
+  `secrets.sh`'s `org` scope stays — it's generic.
+
 ## 2.2.0
 
 - Added a reusable `renovate.yml` — self-hosted Renovate that each consumer calls

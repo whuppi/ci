@@ -112,7 +112,8 @@ cmd_set() {
     ghn="$key"
     if [ "$env" = "org" ]; then
         # Org-wide secret, visible to every whuppi repo — used by reusable
-        # workflows running in a consumer's context (e.g. Renovate).
+        # workflows running in a consumer's context (e.g. the composite-refs
+        # sweep's CI_ACTIONS_TOKEN).
         gh secret set "$ghn" --org "$ORG" --visibility all --body "$value"
         echo "✓ GitHub:    org $ORG → $ghn (all repos)"
     else

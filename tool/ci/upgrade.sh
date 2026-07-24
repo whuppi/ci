@@ -12,6 +12,7 @@ set -euo pipefail
 #   bore          BORE_VERSION + 3 sha256        ekzhang/bore
 #   zizmor gate   ZIZMOR_VERSION                 PyPI
 #   actionlint    ACTIONLINT_VERSION             rhysd/actionlint
+#   pinact        PINACT_VERSION                 suzuki-shunsuke/pinact
 #
 # Owned elsewhere by design (NOT here):
 #   GitHub-action SHAs             Dependabot (.github/dependabot.yml, this repo)
@@ -204,6 +205,14 @@ if [ -n "$al_latest" ] && [ "$al_latest" != "$ACTIONLINT_VERSION" ]; then
   drift=1
   echo "actionlint: $ACTIONLINT_VERSION -> $al_latest"
   [ "$MODE" = apply ] && set_kv ACTIONLINT_VERSION "$al_latest" "$VERSIONS"
+fi
+
+# ── pinact (composite-refs sweep in upgrade-check.yml; version in versions.env) ─
+pinact_latest="$(gh_latest_tag suzuki-shunsuke/pinact | sed 's/^v//')"
+if [ -n "$pinact_latest" ] && [ "$pinact_latest" != "$PINACT_VERSION" ]; then
+  drift=1
+  echo "pinact: $PINACT_VERSION -> $pinact_latest"
+  [ "$MODE" = apply ] && set_kv PINACT_VERSION "$pinact_latest" "$VERSIONS"
 fi
 
 # ── bore (version + 3 verified sha256, all in versions.env) ──────────
