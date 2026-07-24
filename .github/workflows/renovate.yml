@@ -1,0 +1,61 @@
+# Reusable Renovate runner — the consumer-side updater a repo can't get from
+# Dependabot. Each consumer calls this on a schedule from its own thin wrapper,
+# exactly like upgrade-check.yml: it runs against the CALLING repo
+# (github.repository), never a hardcoded list.
+#
+# Renovate reads composite action.yml (Dependabot is blind to composites —
+# dependabot-core#6704), so it keeps every whuppi/ci ref uniform (workflow AND
+# composite) and bumps third-party actions hidden in composites. Update rules
+# live in the consumer's own renovate.json5.
+#
+# TOKEN: RENOVATE_TOKEN — a fine-grained PAT (Contents + Workflows +
+# Pull-requests + Issues: write) on all whuppi repos, held as a whuppi ORG
+# secret and passed in by the caller. GITHUB_TOKEN can't write .github/workflows/,
+# which is exactly what Renovate must do — hence the PAT.
+name: Renovate
+
+on:
+  workflow_call:
+    inputs:
+      dryRun:
+        type: boolean
+        required: false
+        default: true      # safe default; callers opt into live with dryRun: false
+      logLevel:
+        type: string
+        required: false
+        default: 'info'
+    secrets:
+      RENOVATE_TOKEN:
+        required: true
+
+permissions: {}
+
+concurrency:
+  group: renovate-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  renovate:
+    name: Renovate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: write        # push bump branches
+      pull-requests: write   # open bump PRs
+      issues: write          # the dependency dashboard issue
+    steps:
+      # No checkout: the Renovate action clones the target repo itself via the
+      # token (which is why there are no persisted git credentials to leak).
+      - uses: renovatebot/github-action@3064367f740a1a91cca218698a63902689cce200 # v46.1.20
+        with:
+          token: ${{ secrets.RENOVATE_TOKEN }}
+          renovate-version: 43.279.0
+        env:
+          # The calling consumer repo — generic, never hardcoded.
+          RENOVATE_REPOSITORIES: ${{ github.repository }}
+          RENOVATE_AUTODISCOVER: 'false'
+          # dryRun true → 'full' (detect only); false → '' (live). 'full' is
+          # truthy so this ternary is sound.
+          RENOVATE_DRY_RUN: ${{ inputs.dryRun && 'full' || '' }}
+          LOG_LEVEL: ${{ inputs.logLevel }}
