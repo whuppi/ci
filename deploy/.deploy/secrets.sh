@@ -17,6 +17,7 @@
 set -e
 
 REPO="whuppi/ci"
+ORG="whuppi"
 BWS="${HOME}/bin/bws --color no"
 BW_PREFIX="ci"
 export BWS_SERVER_URL="${BWS_SERVER_URL:-https://vault.bitwarden.eu}"
@@ -83,8 +84,8 @@ bws_set() {
 
 validate_env() {
     case "$1" in
-        release) return 0 ;;
-        *) echo "Invalid env: $1 (use release)"; exit 1 ;;
+        release|org) return 0 ;;
+        *) echo "Invalid env: $1 (use release or org)"; exit 1 ;;
     esac
 }
 
@@ -109,8 +110,15 @@ cmd_set() {
 
     local ghn
     ghn="$key"
-    gh secret set "$ghn" --env "$env" --body "$value" --repo "$REPO"
-    echo "✓ GitHub:    $REPO → $env → $ghn"
+    if [ "$env" = "org" ]; then
+        # Org-wide secret, visible to every whuppi repo — used by reusable
+        # workflows running in a consumer's context (e.g. Renovate).
+        gh secret set "$ghn" --org "$ORG" --visibility all --body "$value"
+        echo "✓ GitHub:    org $ORG → $ghn (all repos)"
+    else
+        gh secret set "$ghn" --env "$env" --body "$value" --repo "$REPO"
+        echo "✓ GitHub:    $REPO → $env → $ghn"
+    fi
 }
 
 # Deletes from both backends, scoped to THIS repo only: GitHub by --repo/--env,
@@ -129,17 +137,18 @@ cmd_rm() {
     key=$(echo "$path" | cut -d/ -f2-)
     validate_env "$env"
 
-    local ghn
+    local ghn scope_args
     ghn="$key"
-    if gh secret list --env "$env" --repo "$REPO" 2>/dev/null | grep -qE "^${ghn}[[:space:]]"; then
-        if gh secret delete "$ghn" --env "$env" --repo "$REPO" 2>/dev/null; then
-            echo "✓ GitHub:    $REPO → $env → $ghn (deleted)"
+    if [ "$env" = "org" ]; then scope_args=(--org "$ORG"); else scope_args=(--env "$env" --repo "$REPO"); fi
+    if gh secret list "${scope_args[@]}" 2>/dev/null | grep -qE "^${ghn}[[:space:]]"; then
+        if gh secret delete "$ghn" "${scope_args[@]}" 2>/dev/null; then
+            echo "✓ GitHub:    $env → $ghn (deleted)"
         else
-            echo "✗ GitHub:    $REPO → $env → $ghn (delete FAILED — still present)"
+            echo "✗ GitHub:    $env → $ghn (delete FAILED — still present)"
             exit 1
         fi
     else
-        echo "· GitHub:    $REPO → $env → $ghn (not present)"
+        echo "· GitHub:    $env → $ghn (not present)"
     fi
 
     local bw_key="$BW_PREFIX/$env/$key"
