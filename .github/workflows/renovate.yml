@@ -62,4 +62,4 @@ jobs:
           # dryRun true → 'full' (detect only); false → '' (live). 'full' is
           # truthy so this ternary is sound.
           RENOVATE_DRY_RUN: ${{ inputs.dryRun && 'full' || '' }}
-          LOG_LEVEL: debug
+          LOG_LEVEL: ${{ inputs.logLevel }}
