@@ -4,6 +4,22 @@ Releases are cut from the top heading here by `self-release.yml`; consumers pin
 an exact version and upgrade through grouped Dependabot PRs. Versioning rules
 live in the README. Newest first.
 
+## 2.2.0
+
+- Added a reusable `renovate.yml` — self-hosted Renovate that each consumer calls
+  from a thin wrapper (same shape as `upgrade-check.yml`), running against the
+  calling repo. It reads composite `action.yml`
+  ([dependabot-core#6704](https://github.com/dependabot/dependabot-core/issues/6704)
+  blind spot), so it keeps whuppi/ci refs uniform and bumps third-party actions
+  hidden in composites. Needs a `RENOVATE_TOKEN` org secret (Contents + Workflows +
+  Pull-requests + Issues: write) — Renovate must write `.github/workflows/`, which
+  `GITHUB_TOKEN` can't.
+- `secrets.sh` gained an `org` scope for org-wide secrets (`set org/KEY`).
+- Removed the `whuppi-ci-refs` job from `upgrade-check.yml`. Renovate replaces it:
+  the sweep needed a Workflows-scope token `GITHUB_TOKEN` couldn't provide, and
+  Renovate reads composites natively. Consumers migrate to the `renovate.yml`
+  wrapper and drop their Dependabot `github-actions` + `pub` config.
+
 ## 2.1.0
 
 - Added a `whuppi-ci-refs` job to the reusable `upgrade-check.yml`. It sweeps
