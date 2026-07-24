@@ -4,6 +4,20 @@ Releases are cut from the top heading here by `self-release.yml`; consumers pin
 an exact version and upgrade through grouped Dependabot PRs. Versioning rules
 live in the README. Newest first.
 
+## 2.4.0
+
+- The opt-in composite sweep now owns **every** action `uses:` ref, not just the
+  composite blind spot — renamed `composite-refs` → `action-refs`. It sweeps
+  every whuppi/ci ref (workflows + composites, uniform) to the latest release AND
+  pins every third-party action (workflows AND composites) to the latest SHA via
+  `pinact`. No more split between Dependabot and a sweep across workflow-vs-composite.
+- This leaves Dependabot owning **only pub deps**. Consumers drop the whole
+  `github-actions` ecosystem from `dependabot.yml` (not just `whuppi/ci*`), keep
+  `sweepActions: true` + `CI_ACTIONS_TOKEN`, and get one PR for all action bumps.
+- The label/branch changed with the rename (`upgrade-action-refs` /
+  `chore/action-refs`); a consumer on 2.3.0's short-lived `composite-refs` shape
+  just re-points its wrapper.
+
 ## 2.3.0
 
 - Reverted Renovate (added in 2.2.0). Deleted the reusable `renovate.yml`. The

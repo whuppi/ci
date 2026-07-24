@@ -1,23 +1,26 @@
 # Reusable consumer upgrade radar — things a consuming repo owns that its
 # updater doesn't cover here, each in its own reviewed PR:
-#   flutter-sdk     — the Flutter SDK pin (.fvmrc + example/.fvmrc) → latest stable.
-#   lockfiles       — pubspec.lock files refreshed to latest in-range.
-#   composite-refs  — the dependabot-core#6704 blind spot (opt-in): every
-#                     whuppi/ci ref (workflow AND composite, kept uniform so the
-#                     pin never splits) → latest release, plus third-party
-#                     actions pinned inside composite action.yml → latest SHA.
+#   flutter-sdk  — the Flutter SDK pin (.fvmrc + example/.fvmrc) → latest stable.
+#   lockfiles    — pubspec.lock files refreshed to latest in-range.
+#   action-refs  — ONE owner for EVERY `uses:` action ref (opt-in): whuppi/ci
+#                  refs across .github (workflows AND composites) → latest
+#                  release, kept uniform so the pin never splits; and every
+#                  third-party action (workflows AND composites alike) → latest
+#                  SHA via pinact.
 #
-# Dependabot still owns pub deps and third-party actions in workflow FILES; the
-# composite-refs job owns only what Dependabot can't see (dependabot never reads
-# `uses:` inside composite action.yml, and a whuppi/ci group bump splits the pin
-# across workflow-vs-composite). A consumer opts in with `sweepActions: true`
-# and passes CI_ACTIONS_TOKEN — a Workflows-scope PAT, because GITHUB_TOKEN
-# can't write .github/workflows/ — and drops `whuppi/ci*` from its Dependabot
-# github-actions group.
+# Why one owner: Dependabot never reads `uses:` inside composite action.yml
+# (dependabot-core#6704), so splitting action updates between Dependabot
+# (workflows) and a sweep (composites) is the ugly half-and-half we refuse. The
+# action-refs job owns ALL action refs — workflow and composite, whuppi/ci and
+# third-party — in one PR. Dependabot is left owning ONLY pub deps (its one
+# competency nothing else here covers). A consumer opts in with
+# `sweepActions: true` + CI_ACTIONS_TOKEN (a Workflows-scope PAT — GITHUB_TOKEN
+# can't write .github/workflows/) and drops the whole `github-actions` ecosystem
+# from its Dependabot config.
 #
 # The shared tool/binary pins (fvm, Chrome, bore, zizmor, actionlint, pinact)
-# reach consumers through a whuppi/ci release + the composite-refs whuppi/ci
-# bump; whuppi/ci owns their versions via self-upgrade.yml.
+# reach consumers through a whuppi/ci release + the action-refs whuppi/ci bump;
+# whuppi/ci owns their versions via self-upgrade.yml.
 name: Upgrade Check
 
 on:
@@ -32,14 +35,14 @@ on:
         required: false
         default: 'dev'
       sweepActions:
-        # Opt in to the composite-refs job. Off by default so a consumer that
+        # Opt in to the action-refs job. Off by default so a consumer that
         # hasn't set up CI_ACTIONS_TOKEN keeps its old Dependabot-only shape.
         type: boolean
         required: false
         default: false
     secrets:
       CI_ACTIONS_TOKEN:
-        # Workflows-scope PAT for the composite-refs job's push (GITHUB_TOKEN
+        # Workflows-scope PAT for the action-refs job's push (GITHUB_TOKEN
         # can't write .github/workflows/). Only needed when sweepActions: true.
         required: false
 
@@ -230,21 +233,19 @@ jobs:
             gh pr edit "$EXISTING_PR" --title "chore: refresh lockfiles" --body "$PR_BODY"
           fi
 
-  # ── Composite + workflow action refs (the dependabot-core#6704 gap) ──
-  # Opt-in (sweepActions: true). Two bumps Dependabot can't reach:
-  #   1. every whuppi/ci ref across .github — workflows AND composite
-  #      action.yml — swept to the latest release, so the pin never splits
-  #      (a Dependabot group bump moves only the workflow refs, and
-  #      pin-availability then rejects the split);
-  #   2. third-party actions pinned inside composite action.yml (e.g.
-  #      actions/cache frozen at an old SHA) → latest SHA, via pinact.
-  # Dependabot keeps pub + third-party actions in workflow FILES; this owns only
-  # the composite blind spot + the uniform whuppi/ci bump. The push needs
-  # CI_ACTIONS_TOKEN (Workflows-scope PAT) — GITHUB_TOKEN can't write
-  # .github/workflows/. github.token (contents:read) still authenticates
-  # pinact's SHA-resolving API reads.
-  composite-refs:
-    name: Composite action refs
+  # ── Action refs — ONE owner for every `uses:` ref (the #6704 fix) ──
+  # Opt-in (sweepActions: true). Bumps EVERY action ref in .github, workflow and
+  # composite alike, in one PR — no split between Dependabot and a sweep:
+  #   1. every whuppi/ci ref (workflows AND composite action.yml) → latest
+  #      release, swept uniform so the pin never splits;
+  #   2. every third-party action (workflows AND composites) → latest SHA, via
+  #      pinact (which reads composite action.yml, the dependabot-core#6704 blind
+  #      spot).
+  # This leaves Dependabot owning ONLY pub deps. The push needs CI_ACTIONS_TOKEN
+  # (Workflows-scope PAT) — GITHUB_TOKEN can't write .github/workflows/.
+  # github.token (contents:read) still authenticates pinact's SHA-resolving reads.
+  action-refs:
+    name: Action refs
     if: ${{ inputs.sweepActions }}
     runs-on: ${{ inputs.runner }}
     timeout-minutes: 15
@@ -278,14 +279,14 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           gh auth setup-git
-          gh label create upgrade-ci-refs --description "Auto: whuppi/ci + composite action ref bump" --color "1d76db" 2>/dev/null || true
-          EXISTING_PR=$(gh pr list --label upgrade-ci-refs --state open --json number --jq '.[0].number // empty')
+          gh label create upgrade-action-refs --description "Auto: every action uses: ref bump (workflows + composites)" --color "1d76db" 2>/dev/null || true
+          EXISTING_PR=$(gh pr list --label upgrade-action-refs --state open --json number --jq '.[0].number // empty')
           echo "existing_pr=$EXISTING_PR" >> "$GITHUB_OUTPUT"
           if [ -n "$EXISTING_PR" ]; then
-            git fetch origin chore/composite-refs 2>/dev/null || true
-            git checkout -B chore/composite-refs origin/chore/composite-refs 2>/dev/null || git checkout -b chore/composite-refs
+            git fetch origin chore/action-refs 2>/dev/null || true
+            git checkout -B chore/action-refs origin/chore/action-refs 2>/dev/null || git checkout -b chore/action-refs
           else
-            git checkout -b chore/composite-refs
+            git checkout -b chore/action-refs
           fi
 
       - name: Sweep every whuppi/ci ref to the latest release
@@ -325,7 +326,7 @@ jobs:
             echo "SWEPT_EOF"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Pin third-party actions inside composites (pinact)
+      - name: Pin every third-party action to the latest SHA (pinact)
         id: pinact
         env:
           # Read-only API for resolving tag → SHA. The write is the push below.
@@ -336,22 +337,22 @@ jobs:
           source .whuppi-ci/tool/versions.env
           go install "github.com/suzuki-shunsuke/pinact/v4/cmd/pinact@v$PINACT_VERSION"
           PATH="$(go env GOPATH)/bin:$PATH"
-          # Composite action.yml ONLY — Dependabot owns third-party actions in
-          # workflow files, so pinact stays out of .github/workflows here to
-          # avoid double-bumping. whuppi/ci refs are excluded (the sweep above
-          # keeps them as version tags, not SHAs).
-          comp=()
-          while IFS= read -r f; do comp+=("$f"); done \
-            < <(find .github/actions \( -name action.yml -o -name action.yaml \) 2>/dev/null || true)
-          if [ ${#comp[@]} -eq 0 ]; then
-            echo "No composite action.yml — nothing to pin."
+          # ALL action files — workflows AND composite action.yml. One owner for
+          # every third-party ref, no split with Dependabot (which is left owning
+          # only pub). whuppi/ci refs are excluded — the sweep above keeps them as
+          # version tags, not SHAs.
+          targets=()
+          while IFS= read -r f; do targets+=("$f"); done \
+            < <(find .github/workflows .github/actions \( -name '*.yml' -o -name '*.yaml' \) 2>/dev/null || true)
+          if [ ${#targets[@]} -eq 0 ]; then
+            echo "No workflow/composite files — nothing to pin."
           else
-            pinact run --update --exclude '^whuppi/ci/' "${comp[@]}"
+            pinact run --update --exclude '^whuppi/ci/' "${targets[@]}"
           fi
-          # Stage any composite that pinact rewrote.
+          # Stage any file pinact rewrote (workflows or composites).
           changed=()
           while IFS= read -r f; do changed+=("$f"); done \
-            < <(git diff --name-only -- '.github/actions/**/action.yml' '.github/actions/**/action.yaml' 2>/dev/null || true)
+            < <(git diff --name-only -- '.github/workflows' '.github/actions' 2>/dev/null || true)
           {
             echo "files<<PINNED_EOF"
             printf '%s\n' "${changed[@]}"
@@ -371,28 +372,28 @@ jobs:
           printf '%s\n%s\n' "$SWEPT_FILES" "$PINNED_FILES" | while IFS= read -r f; do
             [ -n "$f" ] && git add -- "$f"
           done
-          git commit -m "ci: bump whuppi/ci + composite action refs" || {
+          git commit -m "ci: bump all action refs (workflows + composites)" || {
             echo "Refs already current — nothing to bump."
             exit 0
           }
           if [ -n "$EXISTING_PR" ]; then
-            git push origin chore/composite-refs
+            git push origin chore/action-refs
           else
-            git push --force origin chore/composite-refs
+            git push --force origin chore/action-refs
           fi
 
           PR_BODY="$(cat <<'EOF'
-          Bumps the refs Dependabot can't reach inside composite `action.yml`
-          (dependabot/dependabot-core#6704):
+          One owner for every `uses:` action ref in `.github` — workflow and
+          composite alike, no split with Dependabot:
 
-          - **whuppi/ci refs** across `.github` — workflows AND vendored composite
-            actions — swept uniform to the latest whuppi/ci release, so the pin
-            never splits (a Dependabot group bump moves only the workflow refs,
-            and pin-availability rejects the split).
-          - **Third-party actions inside composites** (e.g. `actions/cache`)
-            pinned to the latest SHA via pinact.
+          - **whuppi/ci refs** across `.github` (workflows AND composite
+            `action.yml`) swept uniform to the latest whuppi/ci release, so the
+            pin never splits.
+          - **Every third-party action** (workflows AND composites) pinned to the
+            latest SHA via pinact — including the refs inside composite
+            `action.yml` that Dependabot can't read (dependabot-core#6704).
 
-          Dependabot still owns pub deps and third-party actions in workflow files.
+          Dependabot owns pub deps only.
 
           Add `ready-to-test` for the full cross-target run, then merge once green.
 
@@ -401,8 +402,8 @@ jobs:
           )"
 
           if [ -z "$EXISTING_PR" ]; then
-            gh pr create --base "$BASE" --head chore/composite-refs \
-              --title "ci: bump whuppi/ci + composite action refs" --label upgrade-ci-refs --draft --body "$PR_BODY"
+            gh pr create --base "$BASE" --head chore/action-refs \
+              --title "ci: bump all action refs (workflows + composites)" --label upgrade-action-refs --draft --body "$PR_BODY"
           else
-            gh pr edit "$EXISTING_PR" --title "ci: bump whuppi/ci + composite action refs" --body "$PR_BODY"
+            gh pr edit "$EXISTING_PR" --title "ci: bump all action refs (workflows + composites)" --body "$PR_BODY"
           fi
