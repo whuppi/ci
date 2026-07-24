@@ -4,6 +4,19 @@ Releases are cut from the top heading here by `self-release.yml`; consumers pin
 an exact version and upgrade through grouped Dependabot PRs. Versioning rules
 live in the README. Newest first.
 
+## 2.1.0
+
+- Added a `whuppi-ci-refs` job to the reusable `upgrade-check.yml`. It sweeps
+  every `whuppi/ci/…@vX.Y.Z` ref across a consumer's `.github` (workflow files
+  and vendored composite `action.yml`s alike) to the latest release, in one
+  reviewed PR. Dependabot's github-actions updater never reads `uses:` refs
+  inside composite actions
+  ([dependabot-core#6704](https://github.com/dependabot/dependabot-core/issues/6704),
+  open), so a grouped bump moved only the workflow refs and split the pin, which
+  `pin-availability` then rejected. The new job owns that bump and keeps the pin
+  uniform by construction. Consumers drop `whuppi/ci*` from their Dependabot
+  `github-actions` group.
+
 ## 2.0.5
 
 - Bumped the Chrome-for-testing pin to 150.0.7871.115 (with chromedriver),

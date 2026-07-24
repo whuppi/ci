@@ -1,10 +1,16 @@
-# Reusable consumer upgrade radar — the two things a consuming repo owns that
+# Reusable consumer upgrade radar — the things a consuming repo owns that
 # Dependabot can't bump, each in its own reviewed PR:
-#   flutter-sdk — the Flutter SDK pin (.fvmrc + example/.fvmrc) → latest stable.
-#   lockfiles   — pubspec.lock files refreshed to latest in-range.
-# The shared tool/binary pins (fvm, Chrome, bore, zizmor, actionlint) are NOT
-# here — whuppi/ci owns those via self-upgrade.yml, and they reach this repo
-# through a whuppi/ci release + a grouped Dependabot bump.
+#   flutter-sdk    — the Flutter SDK pin (.fvmrc + example/.fvmrc) → latest stable.
+#   lockfiles      — pubspec.lock files refreshed to latest in-range.
+#   whuppi-ci-refs — every `whuppi/ci/...@vX.Y.Z` ref across .github (workflows
+#                    AND vendored composite action.yml) → the latest whuppi/ci
+#                    release, in one sweep. Dependabot never touches refs inside
+#                    composite actions (dependabot/dependabot-core#6704), so a
+#                    grouped bump splits the pin and the pin-availability gate
+#                    rejects it — this keeps every ref on one version.
+# The shared tool/binary pins (fvm, Chrome, bore, zizmor, actionlint) that
+# whuppi/ci bakes into its actions reach this repo the same way — through the
+# whuppi/ci ref bump above; whuppi/ci owns their versions via self-upgrade.yml.
 name: Upgrade Check
 
 on:
@@ -204,4 +210,120 @@ jobs:
               --title "chore: refresh lockfiles" --label upgrade-locks --draft --body "$PR_BODY"
           else
             gh pr edit "$EXISTING_PR" --title "chore: refresh lockfiles" --body "$PR_BODY"
+          fi
+
+  # ── whuppi/ci refs (workflows + vendored composite actions) ──────
+  # Dependabot can't bump whuppi/ci refs that live inside composite action.yml
+  # files (dependabot/dependabot-core#6704), so a grouped bump moves only the
+  # workflow-level refs and splits the pin — which pin-availability then rejects.
+  # This sweeps EVERY versioned whuppi/ci ref, workflow and composite alike, to
+  # the latest release in one PR. Consumers drop whuppi/ci from their Dependabot
+  # group; this owns it instead.
+  whuppi-ci-refs:
+    name: whuppi/ci refs
+    runs-on: ${{ inputs.runner }}
+    timeout-minutes: 15
+    permissions:
+      contents: write       # pushes the chore/whuppi-ci-refs branch
+      pull-requests: write  # opens / edits the PR
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ inputs.branch }}
+          persist-credentials: false
+
+      - name: Prepare branch
+        id: branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          gh auth setup-git
+          gh label create upgrade-ci-refs --description "Auto: whuppi/ci ref bump" --color "1d76db" 2>/dev/null || true
+          EXISTING_PR=$(gh pr list --label upgrade-ci-refs --state open --json number --jq '.[0].number // empty')
+          echo "existing_pr=$EXISTING_PR" >> "$GITHUB_OUTPUT"
+          if [ -n "$EXISTING_PR" ]; then
+            git fetch origin chore/whuppi-ci-refs 2>/dev/null || true
+            git checkout -B chore/whuppi-ci-refs origin/chore/whuppi-ci-refs 2>/dev/null || git checkout -b chore/whuppi-ci-refs
+          else
+            git checkout -b chore/whuppi-ci-refs
+          fi
+
+      - name: Sweep every whuppi/ci ref to the latest release
+        id: sweep
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          latest="$(gh api repos/whuppi/ci/releases/latest --jq '.tag_name' 2>/dev/null || true)"
+          # latest is interpolated into the sed below — reject anything but an
+          # exact vX.Y.Z tag, or a crafted release name becomes sed injection.
+          if ! printf '%s' "$latest" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::implausible whuppi/ci release tag: '$latest'" >&2
+            exit 1
+          fi
+          # Every .github file pinning a whuppi/ci ref to a version tag —
+          # workflows AND composite action.yml. `@main` refs (intentionally
+          # floating) carry no @v and are left untouched.
+          # Fill the array the bash-3.2-portable way (macOS ships that bash).
+          files=()
+          while IFS= read -r f; do files+=("$f"); done \
+            < <(grep -rlE 'whuppi/ci/[^@[:space:]]*@v[0-9.]+' .github || true)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "No versioned whuppi/ci refs found — nothing to sweep."
+            exit 0
+          fi
+          for f in "${files[@]}"; do
+            sed -i.bak -E "s#(whuppi/ci/[^@[:space:]]*)@v[0-9.]+#\1@${latest}#g" "$f"
+            rm -f "$f.bak"
+          done
+          # Hand the exact rewritten paths to the commit step so it stages only
+          # those, matching the sibling jobs' targeted add (never a blanket add).
+          {
+            echo "files<<SWEPT_EOF"
+            printf '%s\n' "${files[@]}"
+            echo "SWEPT_EOF"
+          } >> "$GITHUB_OUTPUT"
+          echo "swept ${#files[@]} file(s) → $latest"
+
+      - name: Commit + open or update the PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EXISTING_PR: ${{ steps.branch.outputs.existing_pr }}
+          BASE: ${{ inputs.branch }}
+          SWEPT_FILES: ${{ steps.sweep.outputs.files }}
+        run: |
+          # Stage only the files the sweep rewrote — never a blanket `git add`.
+          printf '%s\n' "$SWEPT_FILES" | while IFS= read -r f; do
+            [ -n "$f" ] && git add -- "$f"
+          done
+          git commit -m "ci: bump whuppi/ci refs to latest" || {
+            echo "whuppi/ci refs already current — nothing to bump."
+            exit 0
+          }
+          if [ -n "$EXISTING_PR" ]; then
+            git push origin chore/whuppi-ci-refs
+          else
+            git push --force origin chore/whuppi-ci-refs
+          fi
+
+          PR_BODY="$(cat <<'EOF'
+          Bumps every `whuppi/ci/...@vX.Y.Z` reference across `.github` — workflows
+          AND vendored composite actions — to the latest whuppi/ci release, in one
+          sweep, so the pin stays uniform. Dependabot can't do this: it never
+          touches refs inside composite `action.yml` (dependabot/dependabot-core#6704),
+          so its grouped bump splits the pin and pin-availability rejects it.
+
+          Add `ready-to-test` for the full cross-target run, then merge once green.
+
+          _Auto-generated by upgrade-check.yml_
+          EOF
+          )"
+
+          if [ -z "$EXISTING_PR" ]; then
+            gh pr create --base "$BASE" --head chore/whuppi-ci-refs \
+              --title "ci: bump whuppi/ci refs to latest" --label upgrade-ci-refs --draft --body "$PR_BODY"
+          else
+            gh pr edit "$EXISTING_PR" --title "ci: bump whuppi/ci refs to latest" --body "$PR_BODY"
           fi

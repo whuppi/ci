@@ -11,9 +11,22 @@ consumer onboarding.
 | Thing | Bumped by | You do |
 |---|---|---|
 | Tool/binary pins (`tool/versions.env`) | `self-upgrade.yml` daily PR | Review the hashes, merge, cut a release |
-| Third-party action SHAs (workflows + composite actions) | Dependabot (7-day cooldown) | Review, merge, cut a release |
+| Third-party action SHAs (workflow files) | Dependabot (7-day cooldown) | Review, merge, cut a release |
 | Consumers' Flutter SDK + lockfiles | reusable `upgrade-check.yml` in each consumer | Nothing here |
-| Consumers' whuppi/ci pins | each consumer's grouped Dependabot PR, after a release here | Cut the release |
+| Consumers' whuppi/ci pins | reusable `upgrade-check.yml` → `whuppi-ci-refs` job — sweeps every ref (workflow **and** composite) to the latest release | Cut the release; consumers sweep to it automatically |
+
+**Why the whuppi/ci sweep isn't Dependabot's job.** Dependabot's github-actions
+updater never touches `uses:` refs inside composite `action.yml`
+([dependabot/dependabot-core#6704](https://github.com/dependabot/dependabot-core/issues/6704),
+open). A consumer's vendored `make-target/action.yml` pins the whuppi/ci
+capability refs there, so a grouped Dependabot bump moves only the workflow-level
+refs and splits the pin — which the `pin-availability` gate then rejects. The
+`whuppi-ci-refs` job `sed`-sweeps every versioned whuppi/ci ref, workflow and
+composite alike, to the latest release, keeping the pin uniform by construction.
+Consumers therefore drop `whuppi/ci*` from their Dependabot `github-actions`
+group. (The same #6704 gap applies to any third-party SHA we ever pin inside our
+OWN composite actions — keep third-party pins in workflow files where Dependabot
+can see them.)
 
 A pin bump merged to `main` reaches nobody until a release is cut — merging
 and releasing are separate, deliberate steps.
