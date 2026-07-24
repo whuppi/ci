@@ -11,25 +11,26 @@ consumer onboarding.
 | Thing | Bumped by | You do |
 |---|---|---|
 | Tool/binary pins (`tool/versions.env`) | `self-upgrade.yml` daily PR | Review the hashes, merge, cut a release |
-| Consumer pub deps + third-party actions in **workflow files** | consumer's **Dependabot** (ignoring `whuppi/ci*`) | Review + merge its grouped PRs |
-| Every **whuppi/ci ref** (workflow + composite, uniform) + third-party actions **inside composites** | the `composite-refs` job in the reusable `upgrade-check.yml` (opt-in) | Review + merge the one bump PR it opens |
+| Consumer **pub deps** (root + example) | consumer's **Dependabot** (pub ecosystem only) | Review + merge its grouped PRs |
+| **Every action `uses:` ref** — whuppi/ci + third-party, workflows AND composites | the `action-refs` job in the reusable `upgrade-check.yml` (opt-in) | Review + merge the one bump PR it opens |
 | Consumers' Flutter SDK + lockfiles | reusable `upgrade-check.yml` | Nothing here |
 
-**The composite blind spot (`composite-refs`).** Dependabot's github-actions
+**One owner for every action ref (`action-refs`).** Dependabot's github-actions
 updater never reads `uses:` refs inside composite `action.yml`
 ([dependabot/dependabot-core#6704](https://github.com/dependabot/dependabot-core/issues/6704),
 open) — a consumer's vendored `make-target/action.yml`, and any third-party action
-pinned inside a composite, is invisible to it. A grouped whuppi/ci bump moves only
-the workflow-level refs and splits the pin, which the `pin-availability` gate then
-rejects. The opt-in `composite-refs` job owns exactly that gap: it sweeps every
-whuppi/ci ref across `.github` (workflows AND composites) to the latest release —
-uniform by construction — and pins third-party actions inside composites to the
-latest SHA with `pinact`. Dependabot keeps pub deps + third-party actions in
-workflow FILES; the two never overlap. A consumer opts in by calling the reusable
-with `sweepActions: true`, passing `CI_ACTIONS_TOKEN`, and adding `whuppi/ci*` to
-its Dependabot `ignore`. The token is a whuppi org secret (`CI_ACTIONS_TOKEN`, a
-Workflows-scope PAT) — the sweep writes `.github/workflows/`, which `GITHUB_TOKEN`
-can't.
+pinned inside a composite, is invisible to it. Splitting action updates between
+Dependabot (workflows) and a sweep (composites) is a half-and-half we refuse: it
+also splits the whuppi/ci pin, which the `pin-availability` gate rejects. So the
+opt-in `action-refs` job owns **all** of it — every `uses:` ref in `.github`,
+workflow and composite alike: it sweeps every whuppi/ci ref to the latest release
+(uniform by construction) and pins every third-party action to the latest SHA with
+`pinact` (which reads composites). Dependabot is left owning **only pub deps** —
+the one thing nothing else here covers. A consumer opts in by calling the reusable
+with `sweepActions: true`, passing `CI_ACTIONS_TOKEN`, and dropping the whole
+`github-actions` ecosystem from its Dependabot config. The token is a whuppi org
+secret (`CI_ACTIONS_TOKEN`, a Workflows-scope PAT) — the sweep writes
+`.github/workflows/`, which `GITHUB_TOKEN` can't.
 
 A pin bump merged to `main` reaches nobody until a release is cut — merging
 and releasing are separate, deliberate steps.
