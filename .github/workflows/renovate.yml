@@ -55,6 +55,10 @@ jobs:
           # The calling consumer repo — generic, never hardcoded.
           RENOVATE_REPOSITORIES: ${{ github.repository }}
           RENOVATE_AUTODISCOVER: 'false'
+          # Commit via the GitHub API, not local git push — avoids the
+          # "repository has changed during renovation" abort that a repo's CI
+          # reacting to the pushed branch can otherwise trigger.
+          RENOVATE_PLATFORM_COMMIT: 'enabled'
           # dryRun true → 'full' (detect only); false → '' (live). 'full' is
           # truthy so this ternary is sound.
           RENOVATE_DRY_RUN: ${{ inputs.dryRun && 'full' || '' }}
