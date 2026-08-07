@@ -62,7 +62,7 @@ jobs:
       contents: write       # pushes the chore/flutter-sdk branch
       pull-requests: write  # opens / edits the SDK PR
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.branch }}
           persist-credentials: false
@@ -154,7 +154,7 @@ jobs:
       contents: write       # pushes the chore/lockfiles branch
       pull-requests: write  # opens / edits the lockfiles PR
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.branch }}
           persist-credentials: false
@@ -252,13 +252,13 @@ jobs:
     permissions:
       contents: read   # pinact's GitHub API reads; the PAT does every write
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.branch }}
           persist-credentials: false
       # whuppi/ci itself — for tool/versions.env (PINACT_VERSION). Stamped to
       # the release tag by self-release.yml, same as the pr-checks gate does.
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: whuppi/ci
           ref: main
