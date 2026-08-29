@@ -4,6 +4,18 @@ Releases are cut from the top heading here by `self-release.yml`; consumers pin
 an exact version and upgrade through grouped Dependabot PRs. Versioning rules
 live in the README. Newest first.
 
+## 2.4.2
+
+- Fixed the `android-emulator` AVD snapshot cache key never carrying the
+  emulator version on Linux and macOS. The version was read before the
+  snapshot step installed the emulator, so the key was
+  `avd-<os>-<arch>-<api>-emunot-installed` on every run: a runner-image
+  emulator bump could not roll the key, the incompatible snapshot failed to
+  load, the emulator cold-booted (the ~5 min the cache exists to avoid) and
+  re-saved under the same key, forever. The version step now installs
+  `emulator` + `platform-tools` first (idempotent) and fails loudly if a
+  version still cannot be read, instead of keying on a constant.
+
 ## 2.4.1
 
 - Fixed the `action-refs` job failing on every run that had no `pinact` changes
