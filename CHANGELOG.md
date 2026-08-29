@@ -7,7 +7,7 @@ live in the README. Newest first.
 ## 2.5.0
 
 - Added a `save` gate to every cache capability — `gradle-cache`,
-  `pods-cache`, `xcode-cache` (`cache-read-only`) and `android-emulator`
+  `pods-cache` (auto-saving `actions/cache` vs restore-only) and `android-emulator`
   (`avd-cache-save`) — and one `cache-save` input on the shared
   `make-target` that forwards to all four. Restores are unchanged. GitHub
   scopes a cache to the ref that wrote it and lets a PR read only its base
