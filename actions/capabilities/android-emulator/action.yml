@@ -376,7 +376,6 @@ runs:
       env:
         INPUTS_API_LEVEL: ${{ inputs.api-level }}
         INPUTS_SCRIPT: ${{ inputs.script }}
-        INPUTS_COLD_BOOT: ${{ inputs.cold-boot }}
 
     # ── Cleanup ──
     - name: Kill emulator (Windows)
