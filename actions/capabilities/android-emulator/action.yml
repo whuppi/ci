@@ -102,8 +102,15 @@ runs:
 
     # restore/save split (not the auto-saving actions/cache) so the write is
     # one gated step at the end, after the emulator has been killed.
+    # Linux/macOS only. A Windows snapshot restores "successfully" and then
+    # the guest never answers adb (port 5554 refused for the full 600 s
+    # boot wait; measured on the first warm Windows row after the key fix,
+    # emulator 37.1.11, WHPX), while the same row cold-boots fine. Until
+    # that is root-caused, Windows cold-boots every run — slower (~5 min)
+    # but green. Do not re-enable Windows here without a warm run that
+    # proves the resume.
     - name: Restore AVD cache
-      if: inputs.avd-cache == 'true'
+      if: inputs.avd-cache == 'true' && runner.os != 'Windows'
       uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       id: avd-cache
       with:
@@ -128,36 +135,6 @@ runs:
         emulator-boot-timeout: 600
         disable-animations: false
         script: echo "AVD snapshot generated for caching."
-
-    - name: Generate AVD snapshot (Windows)
-      if: >-
-        runner.os == 'Windows' &&
-        inputs.avd-cache == 'true' &&
-        steps.avd-cache.outputs.cache-hit != 'true'
-      shell: bash
-      run: |
-        SDK="$(cygpath "$ANDROID_HOME")"
-        SDKMGR="$(find "$SDK/cmdline-tools" -name "sdkmanager*" -type f | head -1)"
-        yes | "$SDKMGR" --licenses > /dev/null 2>&1 || true
-        "$SDKMGR" \
-          "system-images;android-${INPUTS_API_LEVEL};aosp_atd;x86_64" \
-          "platform-tools" "emulator" > /dev/null
-        AVDMGR="$(find "$SDK/cmdline-tools" -name "avdmanager*" -type f | head -1)"
-        echo no | "$AVDMGR" create avd --force -n test \
-          --package "system-images;android-${INPUTS_API_LEVEL};aosp_atd;x86_64"
-        "$SDK/emulator/emulator" -port 5554 -avd test \
-          -no-window -noaudio -no-boot-anim &
-        TIMEOUT=600; ELAPSED=0
-        while [ $ELAPSED -lt $TIMEOUT ]; do
-          RESULT=$("$SDK/platform-tools/adb" -s emulator-5554 \
-            shell getprop sys.boot_completed 2>/dev/null || true)
-          [ "$RESULT" = "1" ] && echo "Booted in ${ELAPSED}s." && break
-          sleep 2; ELAPSED=$((ELAPSED + 2))
-        done
-        "$SDK/platform-tools/adb" -s emulator-5554 emu kill || true
-        sleep 5
-      env:
-        INPUTS_API_LEVEL: ${{ inputs.api-level }}
 
     # ── Teardown watchdog wrapper ──
     # Written to /tmp and passed as the reactivecircus script.
@@ -350,12 +327,10 @@ runs:
 
         ADB="$SDK/platform-tools/adb -s emulator-5554"
 
-        # Boot emulator (matches action's launchEmulator).
-        if [ "$INPUTS_COLD_BOOT" = "true" ]; then
-          SNAP_FLAG="-no-snapshot"
-        else
-          SNAP_FLAG="-no-snapshot-save"
-        fi
+        # Boot emulator (matches action's launchEmulator). Always a cold
+        # boot on Windows — see the AVD cache restore step: a restored
+        # snapshot never comes up for adb here.
+        SNAP_FLAG="-no-snapshot"
         "$SDK/emulator/emulator" -port 5554 -avd test \
           $SNAP_FLAG -no-window -noaudio -no-boot-anim &
 
@@ -418,6 +393,7 @@ runs:
     - name: Save AVD cache
       if: >-
         always() &&
+        runner.os != 'Windows' &&
         inputs.avd-cache == 'true' &&
         inputs.avd-cache-save == 'true' &&
         steps.avd-cache.outputs.cache-hit != 'true'
