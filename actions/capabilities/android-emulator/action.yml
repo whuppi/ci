@@ -57,19 +57,38 @@ runs:
         $ANDROID_HOME/platform-tools/adb devices
 
     # ── AVD snapshot cache ──
-    # Include emulator version in cache key — runner image updates
-    # change the emulator binary, making old snapshots incompatible.
+    # The cache key MUST carry the real emulator version: a snapshot is
+    # QEMU state, and a runner-image update that ships a newer emulator
+    # makes the old snapshot fail to load (the emulator then cold-boots,
+    # the ~5 min the cache exists to avoid, and re-saves under the same
+    # key — so it never self-heals). On Linux and macOS the emulator is
+    # not on the stock image; the snapshot step below would install it,
+    # but that runs AFTER the key is computed, so reading the version
+    # here used to yield "not-installed" forever and the key could never
+    # roll. Install the emulator + platform-tools first (idempotent, a few
+    # seconds when present), then read the version. Never fall back to a
+    # constant here: a key without the version is a key that lies.
     - name: Emulator version
       id: emu-ver
       shell: bash
       run: |
-        EMU="$ANDROID_HOME/emulator/emulator"
-        if [ -f "$EMU" ]; then
-          VER=$("$EMU" -version 2>/dev/null | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || echo "unknown")
-        else
-          VER="not-installed"
+        set -euo pipefail
+        SDK="$ANDROID_HOME"
+        if command -v cygpath &>/dev/null; then SDK="$(cygpath "$SDK")"; fi
+        EMU="$SDK/emulator/emulator"
+        # Windows ships emulator.exe; Git Bash's execvp resolves the bare
+        # name, but a file test must check the real name.
+        if [ ! -f "$EMU" ] && [ ! -f "$EMU.exe" ]; then
+          SDKMGR="$(find "$SDK/cmdline-tools" -name "sdkmanager*" -type f | head -1)"
+          yes | "$SDKMGR" --licenses > /dev/null 2>&1 || true
+          "$SDKMGR" "emulator" "platform-tools" > /dev/null
         fi
-        echo "version=$VER" >> $GITHUB_OUTPUT
+        VER=$("$EMU" -version 2>/dev/null | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || true)
+        if [ -z "$VER" ]; then
+          echo "::error::Android emulator version could not be read from $EMU — the AVD cache key would be unversioned"
+          exit 1
+        fi
+        echo "version=$VER" >> "$GITHUB_OUTPUT"
         echo "Emulator version: $VER"
 
     - name: Restore AVD cache
