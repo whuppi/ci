@@ -4,6 +4,22 @@ Releases are cut from the top heading here by `self-release.yml`; consumers pin
 an exact version and upgrade through grouped Dependabot PRs. Versioning rules
 live in the README. Newest first.
 
+## 2.4.1
+
+- Fixed the `action-refs` job failing on every run that had no `pinact` changes
+  to make — which, since 2.4.0 shipped, has been almost every run. The staging
+  loop ended in `[ -n "$f" ] && git add -- "$f"`, so on the blank line an empty
+  `PINNED_FILES` contributes, the test is false, `&&` short-circuits to exit 1,
+  and that becomes the loop's status. The loop runs inside a pipeline, so under
+  `set -e -o pipefail` the step died before it could commit, push, or update the
+  PR. The sweep itself had already rewritten the files correctly every time; only
+  the staging step fell over. Consumers saw a red daily radar and an action-refs
+  PR frozen at whatever commit the last run with pin changes produced.
+- Bumped pinned tools: fvm 4.1.2 → 4.3.0, zizmor 1.28.0 → 1.29.0, pinact
+  4.1.0 → 4.1.1, Chrome 151 → 152.
+- Bumped pinned actions: checkout v7.0.1, labeler v7.0.0, setup-java v5.7.0,
+  stale v11.0.0.
+
 ## 2.4.0
 
 - The opt-in composite sweep now owns **every** action `uses:` ref, not just the

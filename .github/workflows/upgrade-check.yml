@@ -369,8 +369,13 @@ jobs:
         run: |
           # Stage only the files the two steps rewrote — never a blanket add,
           # and never .whuppi-ci (our transient whuppi/ci checkout).
+          # `|| continue`, not `&& git add`: with an empty PINNED_FILES the last
+          # line read is blank, so a trailing `&&` short-circuits to exit 1 —
+          # which becomes the loop's status, then the pipeline's, and `set -e`
+          # kills the step before it ever commits.
           printf '%s\n%s\n' "$SWEPT_FILES" "$PINNED_FILES" | while IFS= read -r f; do
-            [ -n "$f" ] && git add -- "$f"
+            [ -n "$f" ] || continue
+            git add -- "$f"
           done
           git commit -m "ci: bump all action refs (workflows + composites)" || {
             echo "Refs already current — nothing to bump."
