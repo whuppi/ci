@@ -1,0 +1,65 @@
+# Reusable cache cleanup — deletes every Actions cache a pull request's
+# merge ref wrote, the moment the PR closes.
+#
+# Why this exists: GitHub scopes a cache to the ref that wrote it, and a run
+# may only read caches from its own ref, the PR's base branch, and the
+# default branch. So everything a PR run saves under refs/pull/N/merge is
+# readable by that PR alone — and the day the PR closes it is readable by
+# nothing, yet it still counts against the repository's cache quota until
+# GitHub's eviction gets to it (last-used order, 7-day unused sweep). A repo
+# with a large matrix leaves gigabytes of dead archives behind every PR;
+# past the quota GitHub evicts live default-branch caches to make room,
+# which is the cache thrash this workflow prevents. Deleting on close is the
+# pattern GitHub documents for exactly this.
+#
+# The caller carries `pull_request: closed`. That event runs with the base
+# repo's token for same-repo PRs, which is what the delete needs; a fork PR
+# runs read-only and its cleanup is simply skipped — never switch the caller
+# to pull_request_target to "fix" that, it would hand a fork write access.
+name: Cache cleanup
+
+on:
+  workflow_call:
+    inputs:
+      runner:
+        type: string
+        required: false
+        default: 'ubuntu-24.04'
+
+permissions: {}
+
+jobs:
+  cleanup:
+    name: Delete the closed PR's caches
+    # Owner-guarded like every privileged reusable; a fork can't run this in
+    # its own context.
+    if: github.repository_owner == 'whuppi'
+    runs-on: ${{ inputs.runner }}
+    permissions:
+      actions: write  # DELETE /repos/{o}/{r}/actions/caches/{id}
+    timeout-minutes: 15
+    steps:
+      - name: Delete caches on the merge ref
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          # The only PR-influenced value is the number, used to build a ref
+          # string — never a body, title, or branch name.
+          REF: refs/pull/${{ github.event.pull_request.number }}/merge
+        run: |
+          set -euo pipefail
+          # IDs via the REST API rather than `gh cache delete <key>`: keys
+          # are not unique across refs (the same key exists on dev and on
+          # every PR that wrote it), and only the id pins one entry.
+          ids=$(gh api --paginate \
+            "repos/$REPO/actions/caches?ref=$REF&per_page=100" \
+            --jq '.actions_caches[].id')
+          n=0
+          for id in $ids; do
+            # One failed delete (already evicted) must not abort the loop.
+            if gh api -X DELETE "repos/$REPO/actions/caches/$id" >/dev/null; then
+              n=$((n+1))
+            fi
+          done
+          echo "deleted $n cache entries on $REF"

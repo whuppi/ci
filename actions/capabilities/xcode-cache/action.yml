@@ -9,6 +9,14 @@ inputs:
     description: "Optional extra cache-key segment (e.g. a dependency revision)"
     required: false
     default: ''
+  save:
+    description: >
+      Whether this run may write the cache. GitHub scopes caches to the ref
+      that wrote them and lets a PR read only its base and the default
+      branch, so a PR's writes are invisible to every other PR and only
+      spend quota. Pass 'false' from PR runs; the default branch warms.
+    required: false
+    default: 'true'
 
 runs:
   using: composite
@@ -17,3 +25,4 @@ runs:
       with:
         key: xcode-${{ runner.os }}-${{ runner.arch }}-${{ inputs.target }}-${{ inputs.key-extra }}
         restore-keys: xcode-${{ runner.os }}-${{ runner.arch }}-${{ inputs.target }}-
+        cache-read-only: ${{ inputs.save != 'true' }}

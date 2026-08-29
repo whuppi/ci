@@ -37,6 +37,15 @@ inputs:
     description: "Cache AVD snapshot for warm boot (~30s vs ~5min cold)"
     required: false
     default: 'true'
+  avd-cache-save:
+    description: >
+      Whether a cold-booted snapshot may be written to the cache (~1 GB per
+      OS). GitHub scopes caches to the ref that wrote them and lets a PR read
+      only its base and the default branch, so a PR's writes are invisible to
+      every other PR and only spend quota. Pass 'false' from PR runs; the
+      default branch warms.
+    required: false
+    default: 'true'
   cold-boot:
     description: "Force cold boot even when snapshot cache exists"
     required: false
@@ -91,9 +100,11 @@ runs:
         echo "version=$VER" >> "$GITHUB_OUTPUT"
         echo "Emulator version: $VER"
 
+    # restore/save split (not the auto-saving actions/cache) so the write is
+    # one gated step at the end, after the emulator has been killed.
     - name: Restore AVD cache
       if: inputs.avd-cache == 'true'
-      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       id: avd-cache
       with:
         path: |
@@ -399,3 +410,21 @@ runs:
       run: |
         SDK="$(cygpath "$ANDROID_HOME")"
         "$SDK/platform-tools/adb" -s emulator-5554 emu kill || true
+
+    # ── AVD snapshot save (cold boot only) ──
+    # Runs after the emulator is down. Skipped on a hit — the key already
+    # exists and GitHub never overwrites one — and when the caller said
+    # this ref must not write.
+    - name: Save AVD cache
+      if: >-
+        always() &&
+        inputs.avd-cache == 'true' &&
+        inputs.avd-cache-save == 'true' &&
+        steps.avd-cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      continue-on-error: true
+      with:
+        path: |
+          ~/.android/avd/*
+          ~/.android/adb*
+        key: avd-${{ runner.os }}-${{ runner.arch }}-${{ inputs.api-level }}-emu${{ steps.emu-ver.outputs.version }}

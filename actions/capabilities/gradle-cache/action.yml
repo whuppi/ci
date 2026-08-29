@@ -8,6 +8,15 @@ inputs:
   phase:
     description: "'restore' before build, 'save' after build"
     required: true
+  save:
+    description: >
+      Whether the 'save' phase may write. GitHub scopes caches to the ref
+      that wrote them and lets a PR read only its base and the default
+      branch, so a PR's writes are invisible to every other PR and only
+      spend quota (a Gradle home is ~1 GB per OS). Pass 'false' from PR
+      runs; the default branch warms.
+    required: false
+    default: 'true'
 
 runs:
   using: composite
@@ -23,13 +32,13 @@ runs:
         restore-keys: gradle-${{ runner.os }}-${{ runner.arch }}-
 
     - name: Stop Gradle daemon
-      if: inputs.phase == 'save'
+      if: inputs.phase == 'save' && inputs.save == 'true'
       continue-on-error: true
       shell: bash
       run: cd example/android && ./gradlew --stop 2>/dev/null || true
 
     - name: Save Gradle cache
-      if: inputs.phase == 'save'
+      if: inputs.phase == 'save' && inputs.save == 'true'
       uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       continue-on-error: true
       with:

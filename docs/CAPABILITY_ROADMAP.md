@@ -27,6 +27,7 @@ planned. Statuses: **DONE** · **PLANNED** · **WONT_DO** (with reason).
 | Shared release script runner | DONE | `release-tool` — action-cache execution, Dependabot-bumpable |
 | Full-test row gating | DONE | `matrix-filter` |
 | SSH debugging tunnel | DONE | `debug-ssh` (bore, key-only) |
+| Cache save gating + PR cache cleanup | DONE | `cache-save` on make-target (forwarded to gradle/pods/xcode/AVD caches); `cache-cleanup.yml` on `pull_request: closed`. PR refs read the default branch's warm caches and write nothing; the default branch is the one warm source |
 | Rust / WASM build capabilities in shared make-target | PLANNED | Deferred — pdf's fork keeps rust/wasm-build/wasm-cache local until a 2nd Rust package makes Rust a shared concern; folds into make-target then (deleting the fork), gated on a green macos-intel matrix (a delegating-wrapper attempt regressed that runner). See ARCHITECTURE's decided boundary calls. |
 
 ## Supply chain + release model

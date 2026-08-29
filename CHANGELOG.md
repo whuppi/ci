@@ -4,6 +4,24 @@ Releases are cut from the top heading here by `self-release.yml`; consumers pin
 an exact version and upgrade through grouped Dependabot PRs. Versioning rules
 live in the README. Newest first.
 
+## 2.5.0
+
+- Added a `save` gate to every cache capability — `gradle-cache`,
+  `pods-cache`, `xcode-cache` (`cache-read-only`) and `android-emulator`
+  (`avd-cache-save`) — and one `cache-save` input on the shared
+  `make-target` that forwards to all four. Restores are unchanged. GitHub
+  scopes a cache to the ref that wrote it and lets a PR read only its base
+  and the default branch, so an archive written from `refs/pull/N/merge`
+  is invisible to every other PR and only spends quota (a Gradle home is
+  ~1 GB per OS, an AVD snapshot ~1 GB). Callers pass
+  `cache-save: ${{ github.event_name != 'pull_request' }}` so the default
+  branch is the one warm source everyone reads; the defaults keep the old
+  save-always behaviour for callers that pass nothing.
+- Added the `cache-cleanup.yml` reusable workflow: on `pull_request:
+  closed` it deletes every cache entry on the PR's merge ref, so dead
+  archives never push live default-branch caches out of the quota.
+  Owner-guarded; skipped for fork PRs (read-only token).
+
 ## 2.4.2
 
 - Fixed the `android-emulator` AVD snapshot cache key never carrying the
