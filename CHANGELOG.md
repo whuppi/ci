@@ -4,6 +4,17 @@ Releases are cut from the top heading here by `self-release.yml`; consumers pin
 an exact version and upgrade through grouped Dependabot PRs. Versioning rules
 live in the README. Newest first.
 
+## 2.6.3
+
+- `oci-cache`: an archive that cannot be extracted is a miss with a warning,
+  never a red job; Windows archives store symlink targets (Git-bash tar
+  cannot create symlinks — the Flutter SDK has a few, and every Windows row
+  failed on restore); a format version now sits in every tag and is bumped
+  with this change, so the existing archives re-save under the new rules.
+- `android-emulator` reads the emulator version from the SDK's
+  `source.properties` (no execution needed); `emulator -version` on a fresh
+  Linux runner printed nothing parseable and failed the row twice.
+
 ## 2.6.2
 
 - `oci-cache` refuses to run in a private repository (a package first pushed

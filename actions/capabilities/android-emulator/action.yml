@@ -99,12 +99,16 @@ runs:
           yes | "$SDKMGR" --licenses > /dev/null 2>&1 || true
           "$SDKMGR" "emulator" "platform-tools" > /dev/null
         fi
-        # Scan the whole output, stderr included: the version line is not
-        # always first (a fresh install prints an .ini warning ahead of it),
-        # and a first-line-only parse failed a Linux row for exactly that.
-        VER=$("$EMU" -version 2>&1 | grep -oE 'emulator version [0-9]+\.[0-9]+\.[0-9]+' | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || true)
+        # The SDK's own package manifest is the source of truth and needs no
+        # execution: `emulator -version` on a fresh Linux install printed
+        # nothing parseable twice in a row (it wants a display / KVM to get
+        # that far). Fall back to running it only when the file is missing.
+        VER=$(grep -oE '^Pkg\.Revision=[0-9]+\.[0-9]+\.[0-9]+' "$SDK/emulator/source.properties" 2>/dev/null | head -1 | cut -d= -f2 || true)
         if [ -z "$VER" ]; then
           VER=$("$EMU" -version 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)
+        fi
+        if [ -z "$VER" ]; then
+          echo "--- emulator -version output ---"; "$EMU" -version 2>&1 | head -20 || true
         fi
         if [ -z "$VER" ]; then
           echo "::error::Android emulator version could not be read from $EMU — the AVD cache key would be unversioned"
