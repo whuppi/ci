@@ -26,6 +26,7 @@ Shared CI for whuppi's Flutter/Dart package repos. Three things live here:
 | `upgrade-check.yml` | Flutter-SDK + lockfile refresh PRs | `schedule` |
 | `release.yml` | gate → discover → publish to pub.dev | `push` (changelog) |
 | `cache-cleanup.yml` | delete a closed PR's caches (keeps the quota for the default branch) | `pull_request` (closed) |
+| `oci-cache-prune.yml` | delete old versions of the ghcr cache package (`oci-cache` retention) | `schedule`, `workflow_dispatch` |
 
 A caller stub owns the trigger and grants the callee's job permissions:
 
@@ -84,7 +85,7 @@ that stamping works is a maintainer detail — see
 
 | Pin | Owned by | Bumped by |
 |---|---|---|
-| fvm, Chrome, bore, zizmor, actionlint (+ sha256) | this repo (`tool/versions.env`) | `self-upgrade.yml` — one bump reaches every consumer via the next release |
+| fvm, Chrome, bore, oras, zizmor, actionlint (+ sha256) | this repo (`tool/versions.env`) | `self-upgrade.yml` — one bump reaches every consumer via the next release |
 | Flutter SDK (`.fvmrc`), lockfiles | consumer repo | reusable `upgrade-check.yml` |
 | pub deps, action SHAs | consumer repo / this repo | Dependabot |
 

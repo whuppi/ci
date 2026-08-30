@@ -37,6 +37,13 @@ inputs:
     description: "Cache AVD snapshot for warm boot (~30s vs ~5min cold)"
     required: false
     default: 'true'
+  avd-cache-backend:
+    description: >
+      'gha' = actions/cache; 'ghcr' = the oci-cache capability (a snapshot
+      is ~1 GB per OS; on the free plan's 10 GB gha quota it competes with
+      the engine archives).
+    required: false
+    default: 'gha'
   avd-cache-save:
     description: >
       Whether a cold-booted snapshot may be written to the cache (~1 GB per
@@ -109,8 +116,20 @@ runs:
     # that is root-caused, Windows cold-boots every run — slower (~5 min)
     # but green. Do not re-enable Windows here without a warm run that
     # proves the resume.
+    - name: Restore AVD cache (ghcr)
+      if: inputs.avd-cache == 'true' && runner.os != 'Windows' && inputs.avd-cache-backend == 'ghcr'
+      id: avd-oci
+      uses: whuppi/ci/actions/capabilities/oci-cache@main
+      with:
+        phase: restore
+        name: avd
+        key: ${{ runner.os }}-${{ runner.arch }}-${{ inputs.api-level }}-emu${{ steps.emu-ver.outputs.version }}
+        path: |
+          ~/.android/avd/*
+          ~/.android/adb*
+
     - name: Restore AVD cache
-      if: inputs.avd-cache == 'true' && runner.os != 'Windows'
+      if: inputs.avd-cache == 'true' && runner.os != 'Windows' && inputs.avd-cache-backend == 'gha'
       uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       id: avd-cache
       with:
@@ -124,7 +143,8 @@ runs:
       if: >-
         runner.os != 'Windows' &&
         inputs.avd-cache == 'true' &&
-        steps.avd-cache.outputs.cache-hit != 'true'
+        steps.avd-cache.outputs.cache-hit != 'true' &&
+        steps.avd-oci.outputs.cache-hit != 'true'
       uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
       with:
         api-level: ${{ inputs.api-level }}
@@ -389,11 +409,28 @@ runs:
     # Runs after the emulator is down. Skipped on a hit — the key already
     # exists and GitHub never overwrites one — and when the caller said
     # this ref must not write.
+    - name: Save AVD cache (ghcr)
+      if: >-
+        always() &&
+        runner.os != 'Windows' &&
+        inputs.avd-cache == 'true' &&
+        inputs.avd-cache-backend == 'ghcr'
+      uses: whuppi/ci/actions/capabilities/oci-cache@main
+      with:
+        phase: save
+        save: ${{ inputs.avd-cache-save }}
+        name: avd
+        key: ${{ runner.os }}-${{ runner.arch }}-${{ inputs.api-level }}-emu${{ steps.emu-ver.outputs.version }}
+        path: |
+          ~/.android/avd/*
+          ~/.android/adb*
+
     - name: Save AVD cache
       if: >-
         always() &&
         runner.os != 'Windows' &&
         inputs.avd-cache == 'true' &&
+        inputs.avd-cache-backend == 'gha' &&
         inputs.avd-cache-save == 'true' &&
         steps.avd-cache.outputs.cache-hit != 'true'
       uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0

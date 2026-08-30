@@ -6,6 +6,23 @@ description: >
   (avoids PATH issues on Windows Git Bash). Version + per-platform sha256
   live in this repo's tool/versions.env, read via GITHUB_ACTION_PATH.
 
+inputs:
+  sdk-cache-backend:
+    description: >
+      Where the Flutter SDK cache (~/.fvm_cache, ~0.8 GB per OS) lives:
+      'gha' = actions/cache, 'ghcr' = the oci-cache capability (GitHub
+      Container Registry — free and uncapped for public repos, so four
+      SDKs stop costing a third of the 10 GB gha quota). The pub cache
+      (~30 MB) stays on gha either way.
+    required: false
+    default: 'gha'
+  cache-save:
+    description: >
+      Whether this run may write the ghcr SDK cache (gha saves itself on
+      a miss). The default branch warms; PR runs read.
+    required: false
+    default: 'true'
+
 runs:
   using: composite
   steps:
@@ -20,10 +37,20 @@ runs:
         restore-keys: pub-${{ runner.os }}-${{ runner.arch }}-
 
     - name: Cache Flutter SDK (FVM)
+      if: inputs.sdk-cache-backend == 'gha'
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ~/.fvm_cache
         key: fvm-sdk-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.fvmrc') }}
+
+    - name: Restore Flutter SDK (ghcr)
+      if: inputs.sdk-cache-backend == 'ghcr'
+      uses: whuppi/ci/actions/capabilities/oci-cache@main
+      with:
+        phase: restore
+        name: fvm-sdk
+        key: ${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.fvmrc') }}
+        path: ~/.fvm_cache
 
     - name: Install FVM + project SDK
       shell: bash
@@ -168,3 +195,15 @@ runs:
         echo "::group::flutter pub get"
         fvm flutter pub get
         echo "::endgroup::"
+
+    # Saved here, after `fvm install`, from the same composite — an SDK is
+    # exact-keyed on .fvmrc, so no fallback tag.
+    - name: Save Flutter SDK (ghcr)
+      if: inputs.sdk-cache-backend == 'ghcr'
+      uses: whuppi/ci/actions/capabilities/oci-cache@main
+      with:
+        phase: save
+        save: ${{ inputs.cache-save }}
+        name: fvm-sdk
+        key: ${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.fvmrc') }}
+        path: ~/.fvm_cache
