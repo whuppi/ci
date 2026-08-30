@@ -82,6 +82,12 @@ runs:
     # ImageVersion is a runner PROCESS variable (not in the `env` context),
     # so it is read in a step; an empty value would freeze the key across
     # image updates — the exact staleness the key exists to prevent.
+    # ANDROID_HOME is the same kind of variable: `${{ env.ANDROID_HOME }}`
+    # is EMPTY inside a composite action, so the archive paths used to
+    # resolve to `/emulator`, `/platform-tools`, … — nothing existed there,
+    # nothing was ever saved, and every run installed the SDK again while
+    # logging "nothing to save". The root is read here, once, as a POSIX
+    # path (cygpath on Windows) and every path below is built from it.
     - name: Runner image version
       if: inputs.sdk-cache-backend == 'ghcr'
       id: img
@@ -89,7 +95,10 @@ runs:
       run: |
         v="${ImageVersion:-}"
         [ -n "$v" ] || { echo "::error::ImageVersion is empty on this runner; the SDK cache key cannot roll with image updates"; exit 1; }
-        echo "version=$v" >> "$GITHUB_OUTPUT"
+        sdk="${ANDROID_HOME:-}"
+        [ -n "$sdk" ] || { echo "::error::ANDROID_HOME is empty on this runner; the SDK cache has no paths to archive"; exit 1; }
+        if command -v cygpath &>/dev/null; then sdk="$(cygpath "$sdk")"; fi
+        { echo "version=$v"; echo "sdk=$sdk"; } >> "$GITHUB_OUTPUT"
 
     - name: Restore Android SDK components (ghcr)
       if: inputs.sdk-cache-backend == 'ghcr'
@@ -100,9 +109,9 @@ runs:
         name: android-sdk
         key: ${{ runner.os }}-${{ runner.arch }}-api${{ inputs.api-level }}-aosp_atd-x86_64-img${{ steps.img.outputs.version }}
         path: |
-          ${{ env.ANDROID_HOME }}/emulator
-          ${{ env.ANDROID_HOME }}/platform-tools
-          ${{ env.ANDROID_HOME }}/system-images/android-${{ inputs.api-level }}
+          ${{ steps.img.outputs.sdk }}/emulator
+          ${{ steps.img.outputs.sdk }}/platform-tools
+          ${{ steps.img.outputs.sdk }}/system-images/android-${{ inputs.api-level }}
 
     # ── adb ──
     - name: Start adb server
@@ -126,6 +135,8 @@ runs:
     - name: Emulator version
       id: emu-ver
       shell: bash
+      env:
+        API: ${{ inputs.api-level }}
       run: |
         set -euo pipefail
         SDK="$ANDROID_HOME"
@@ -133,10 +144,12 @@ runs:
         EMU="$SDK/emulator/emulator"
         # Windows ships emulator.exe; Git Bash's execvp resolves the bare
         # name, but a file test must check the real name.
-        if [ ! -f "$EMU" ] && [ ! -f "$EMU.exe" ]; then
+        IMG_PKG="system-images;android-${API};aosp_atd;x86_64"
+        IMG_PROPS="$SDK/system-images/android-${API}/aosp_atd/x86_64/source.properties"
+        if [ ! -f "$EMU" ] && [ ! -f "$EMU.exe" ] || [ ! -f "$IMG_PROPS" ]; then
           SDKMGR="$(find "$SDK/cmdline-tools" -name "sdkmanager*" -type f | head -1)"
           yes | "$SDKMGR" --licenses > /dev/null 2>&1 || true
-          "$SDKMGR" "emulator" "platform-tools" > /dev/null
+          "$SDKMGR" "emulator" "platform-tools" "$IMG_PKG" > /dev/null
         fi
         # The SDK's own package manifest is the source of truth and needs no
         # execution: `emulator -version` on a fresh Linux install printed
@@ -153,8 +166,21 @@ runs:
           echo "::error::Android emulator version could not be read from $EMU — the AVD cache key would be unversioned"
           exit 1
         fi
-        echo "version=$VER" >> "$GITHUB_OUTPUT"
-        echo "Emulator version: $VER"
+        # The snapshot is guest RAM taken on ONE system-image build. Google
+        # re-publishes `system-images;android-N;aosp_atd;x86_64` under the
+        # same package name with a new revision, and a snapshot resumed onto
+        # a different build comes up with dead system services ("No service
+        # published for: input" on the action's first adb command — 3 of 4
+        # Linux rows, measured 2026-08-30). The image revision is part of
+        # what the snapshot IS, so it is part of the key; the SDK archive
+        # pins the same revision on every run, so the pair stays matched.
+        IMG=$(grep -oE '^Pkg\.Revision=[0-9]+' "$IMG_PROPS" 2>/dev/null | head -1 | cut -d= -f2 || true)
+        if [ -z "$IMG" ]; then
+          echo "::error::system image revision could not be read from $IMG_PROPS — the AVD cache key would be unversioned"
+          exit 1
+        fi
+        { echo "version=$VER"; echo "image=$IMG"; } >> "$GITHUB_OUTPUT"
+        echo "Emulator version: $VER; system image android-${API} aosp_atd revision $IMG"
 
     # restore/save split (not the auto-saving actions/cache) so the write is
     # one gated step at the end, after the emulator has been killed.
@@ -172,7 +198,7 @@ runs:
       with:
         phase: restore
         name: avd
-        key: ${{ runner.os }}-${{ runner.arch }}-${{ inputs.api-level }}-emu${{ steps.emu-ver.outputs.version }}
+        key: ${{ runner.os }}-${{ runner.arch }}-${{ inputs.api-level }}-emu${{ steps.emu-ver.outputs.version }}-img${{ steps.emu-ver.outputs.image }}
         path: |
           ~/.android/avd/*
           ~/.android/adb*
@@ -185,7 +211,7 @@ runs:
         path: |
           ~/.android/avd/*
           ~/.android/adb*
-        key: avd-${{ runner.os }}-${{ runner.arch }}-${{ inputs.api-level }}-emu${{ steps.emu-ver.outputs.version }}
+        key: avd-${{ runner.os }}-${{ runner.arch }}-${{ inputs.api-level }}-emu${{ steps.emu-ver.outputs.version }}-img${{ steps.emu-ver.outputs.image }}
 
     # ── Snapshot generation (cache miss only) ──
     - name: Generate AVD snapshot (Linux/macOS)
@@ -469,7 +495,7 @@ runs:
         phase: save
         save: ${{ inputs.avd-cache-save }}
         name: avd
-        key: ${{ runner.os }}-${{ runner.arch }}-${{ inputs.api-level }}-emu${{ steps.emu-ver.outputs.version }}
+        key: ${{ runner.os }}-${{ runner.arch }}-${{ inputs.api-level }}-emu${{ steps.emu-ver.outputs.version }}-img${{ steps.emu-ver.outputs.image }}
         path: |
           ~/.android/avd/*
           ~/.android/adb*
@@ -488,7 +514,7 @@ runs:
         path: |
           ~/.android/avd/*
           ~/.android/adb*
-        key: avd-${{ runner.os }}-${{ runner.arch }}-${{ inputs.api-level }}-emu${{ steps.emu-ver.outputs.version }}
+        key: avd-${{ runner.os }}-${{ runner.arch }}-${{ inputs.api-level }}-emu${{ steps.emu-ver.outputs.version }}-img${{ steps.emu-ver.outputs.image }}
 
     # ── SDK components save (ghcr) ──
     # After the emulator is down: everything the run installed is on disk.
@@ -501,6 +527,6 @@ runs:
         name: android-sdk
         key: ${{ runner.os }}-${{ runner.arch }}-api${{ inputs.api-level }}-aosp_atd-x86_64-img${{ steps.img.outputs.version }}
         path: |
-          ${{ env.ANDROID_HOME }}/emulator
-          ${{ env.ANDROID_HOME }}/platform-tools
-          ${{ env.ANDROID_HOME }}/system-images/android-${{ inputs.api-level }}
+          ${{ steps.img.outputs.sdk }}/emulator
+          ${{ steps.img.outputs.sdk }}/platform-tools
+          ${{ steps.img.outputs.sdk }}/system-images/android-${{ inputs.api-level }}
