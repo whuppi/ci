@@ -4,6 +4,21 @@ Releases are cut from the top heading here by `self-release.yml`; consumers pin
 an exact version and upgrade through grouped Dependabot PRs. Versioning rules
 live in the README. Newest first.
 
+## 2.7.2
+
+- `android-emulator`'s ghcr SDK archive was never saved: its paths were
+  built from `${{ env.ANDROID_HOME }}`, which is empty inside a composite
+  action (a runner process variable, like `ImageVersion`), so every run
+  logged "nothing to save" and re-installed the SDK. The root is now read
+  in a step as a POSIX path.
+- The AVD snapshot key carries the system-image revision. A snapshot is
+  guest RAM taken on one build of `system-images;android-N;aosp_atd;x86_64`;
+  resumed onto a re-published build it comes up with dead system services
+  (the action's first `adb shell input keyevent 82` failed with "No service
+  published for: input" on 3 of 4 Linux rows). The emulator-version step
+  installs the image alongside the emulator and reads its `Pkg.Revision`;
+  with the SDK archive hitting, the pair stays matched run to run.
+
 ## 2.7.1
 
 - `android-emulator`'s SDK cache key read `ImageVersion` from the `env`
