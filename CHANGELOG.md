@@ -4,6 +4,16 @@ Releases are cut from the top heading here by `self-release.yml`; consumers pin
 an exact version and upgrade through grouped Dependabot PRs. Versioning rules
 live in the README. Newest first.
 
+## 2.7.0
+
+- `android-emulator` gains `sdk-cache-backend: ghcr`: the emulator,
+  platform-tools and the API level's system image (~1 GB) are restored from
+  the GitHub Container Registry before anything touches the SDK, keyed on
+  the runner image version (a new image rolls the key), and saved after the
+  emulator is down. Every Linux/macOS row otherwise re-downloaded them
+  through sdkmanager (1–2 min). `make-target` forwards it from
+  `cache-backend: ghcr`.
+
 ## 2.6.3
 
 - `oci-cache`: an archive that cannot be extracted is a miss with a warning,
