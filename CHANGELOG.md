@@ -4,6 +4,13 @@ Releases are cut from the top heading here by `self-release.yml`; consumers pin
 an exact version and upgrade through grouped Dependabot PRs. Versioning rules
 live in the README. Newest first.
 
+## 2.5.1
+
+- `gradle-cache` no longer runs its save phase after an exact-key restore
+  hit. GitHub never overwrites an existing key, so the save tarred ~1 GB
+  (two minutes on Windows) only to be refused with "Unable to reserve
+  cache". A `restore-keys` prefix hit is not exact and still saves.
+
 ## 2.5.0
 
 - Added a `save` gate to every cache capability — `gradle-cache`,
