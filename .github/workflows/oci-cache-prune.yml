@@ -38,7 +38,7 @@ jobs:
     if: github.repository_owner == 'whuppi'
     runs-on: ${{ inputs.runner }}
     permissions:
-      packages: write
+      packages: write  # list + delete versions of the consumer's cache package
     timeout-minutes: 15
     steps:
       - name: Delete stale versions

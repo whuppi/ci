@@ -165,7 +165,7 @@ jobs:
           mkdir -p "$HOME/.selfcheck-cache/nested"
           head -c 3000000 /dev/urandom > "$HOME/.selfcheck-cache/nested/blob.bin"
           echo "hello" > "$HOME/.selfcheck-cache/marker.txt"
-          sha256sum < "$HOME/.selfcheck-cache/nested/blob.bin" | cut -d' ' -f1 > "$RUNNER_TEMP/expected.sha"
+          shasum -a 256 < "$HOME/.selfcheck-cache/nested/blob.bin" | cut -d' ' -f1 > "$RUNNER_TEMP/expected.sha"
       - name: Save
         uses: ./actions/capabilities/oci-cache
         with:
@@ -193,7 +193,7 @@ jobs:
           set -euo pipefail
           [ "$HIT" = true ] || { echo "::error::exact restore reported a miss"; exit 1; }
           [ "$(cat "$HOME/.selfcheck-cache/marker.txt")" = hello ]
-          [ "$(sha256sum < "$HOME/.selfcheck-cache/nested/blob.bin" | cut -d' ' -f1)" = "$(cat "$RUNNER_TEMP/expected.sha")" ]
+          [ "$(shasum -a 256 < "$HOME/.selfcheck-cache/nested/blob.bin" | cut -d' ' -f1)" = "$(cat "$RUNNER_TEMP/expected.sha")" ]
           echo "exact round-trip OK"
           rm -rf "$HOME/.selfcheck-cache"
       - name: Restore (fallback)
