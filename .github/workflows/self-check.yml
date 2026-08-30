@@ -139,3 +139,81 @@ jobs:
       - name: Pinned assets still reachable
         shell: bash
         run: bash tool/ci/upgrade.sh check-availability
+
+  # The one capability whose correctness cannot be linted: a real save +
+  # restore against GHCR on every OS. Same-repo PRs only (a fork PR has a
+  # read-only token and the job is skipped rather than red).
+  oci-cache-roundtrip:
+    name: oci-cache round-trip (${{ matrix.os }})
+    if: github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'workflow_dispatch'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2025-vs2026]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write  # push the round-trip archive to ghcr.io/whuppi/ci/cache
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Make something to cache
+        shell: bash
+        run: |
+          mkdir -p "$HOME/.selfcheck-cache/nested"
+          head -c 3000000 /dev/urandom > "$HOME/.selfcheck-cache/nested/blob.bin"
+          echo "hello" > "$HOME/.selfcheck-cache/marker.txt"
+          # sha256sum on Linux/Git-bash, shasum on macOS — fed on stdin.
+          sum256() { if command -v sha256sum >/dev/null 2>&1; then sha256sum; else shasum -a 256; fi; }
+          sum256 < "$HOME/.selfcheck-cache/nested/blob.bin" | cut -d' ' -f1 > "$RUNNER_TEMP/expected.sha"
+      - name: Save
+        uses: ./actions/capabilities/oci-cache
+        with:
+          phase: save
+          name: selfcheck
+          key: ${{ runner.os }}-${{ runner.arch }}-${{ github.run_id }}-${{ github.run_attempt }}
+          fallback: ${{ runner.os }}-${{ runner.arch }}-latest
+          path: ~/.selfcheck-cache
+      - name: Wipe
+        shell: bash
+        run: rm -rf "$HOME/.selfcheck-cache"
+      - name: Restore (exact)
+        id: exact
+        uses: ./actions/capabilities/oci-cache
+        with:
+          phase: restore
+          name: selfcheck
+          key: ${{ runner.os }}-${{ runner.arch }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ~/.selfcheck-cache
+      - name: Verify exact
+        shell: bash
+        env:
+          HIT: ${{ steps.exact.outputs.cache-hit }}
+        run: |
+          set -euo pipefail
+          [ "$HIT" = true ] || { echo "::error::exact restore reported a miss"; exit 1; }
+          [ "$(cat "$HOME/.selfcheck-cache/marker.txt")" = hello ]
+          sum256() { if command -v sha256sum >/dev/null 2>&1; then sha256sum; else shasum -a 256; fi; }
+          [ "$(sum256 < "$HOME/.selfcheck-cache/nested/blob.bin" | cut -d' ' -f1)" = "$(cat "$RUNNER_TEMP/expected.sha")" ]
+          echo "exact round-trip OK"
+          rm -rf "$HOME/.selfcheck-cache"
+      - name: Restore (fallback)
+        id: fb
+        uses: ./actions/capabilities/oci-cache
+        with:
+          phase: restore
+          name: selfcheck
+          key: ${{ runner.os }}-${{ runner.arch }}-no-such-key
+          fallback: ${{ runner.os }}-${{ runner.arch }}-latest
+          path: ~/.selfcheck-cache
+      - name: Verify fallback
+        shell: bash
+        env:
+          HIT: ${{ steps.fb.outputs.cache-hit }}
+        run: |
+          set -euo pipefail
+          [ "$HIT" = false ] || { echo "::error::fallback restore must not report an exact hit"; exit 1; }
+          [ "$(cat "$HOME/.selfcheck-cache/marker.txt")" = hello ]
+          echo "fallback round-trip OK"

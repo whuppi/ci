@@ -1,0 +1,75 @@
+# Reusable retention for the oci-cache capability. GHCR never evicts, so a
+# package that receives a new archive on every key change grows forever
+# unless something deletes old versions. This deletes every version of the
+# consumer's cache package that is older than `retention-days` — except
+# versions carrying a fallback tag (`*-latest`), which are the warm source
+# the next run reads — and every untagged version (a re-pointed fallback
+# leaves the previous manifest untagged).
+#
+# Caller: `schedule` (daily) + `workflow_dispatch`, with `packages: write`.
+# GHCR grants a workflow token admin on packages that were published from
+# that repository with GITHUB_TOKEN, which is exactly what oci-cache does,
+# so no PAT is involved.
+name: OCI cache prune
+
+on:
+  workflow_call:
+    inputs:
+      retention-days:
+        description: "Delete versions not updated for this many days"
+        type: number
+        required: false
+        default: 14
+      package:
+        description: "Package path under the owner (default: <repo>/cache)"
+        type: string
+        required: false
+        default: ''
+      runner:
+        type: string
+        required: false
+        default: 'ubuntu-24.04'
+
+permissions: {}
+
+jobs:
+  prune:
+    name: Prune old cache versions
+    if: github.repository_owner == 'whuppi'
+    runs-on: ${{ inputs.runner }}
+    permissions:
+      packages: write  # list + delete versions of the consumer's cache package
+    timeout-minutes: 15
+    steps:
+      - name: Delete stale versions
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OWNER: ${{ github.repository_owner }}
+          REPO_NAME: ${{ github.event.repository.name }}
+          PACKAGE_IN: ${{ inputs.package }}
+          DAYS: ${{ inputs.retention-days }}
+        run: |
+          set -euo pipefail
+          pkg="${PACKAGE_IN:-$REPO_NAME/cache}"; pkg=$(printf '%s' "$pkg" | tr '[:upper:]' '[:lower:]')
+          enc=$(printf '%s' "$pkg" | sed 's#/#%2F#g')
+          # Org- and user-owned packages live under different routes.
+          kind=$(gh api "users/$OWNER" --jq .type)
+          if [ "$kind" = Organization ]; then base="orgs/$OWNER"; else base="users/$OWNER"; fi
+          cutoff=$(date -u -d "-${DAYS} days" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -v-"${DAYS}"d +%Y-%m-%dT%H:%M:%SZ)
+          echo "package $pkg — deleting versions updated before $cutoff (fallback tags kept)"
+          kept=0; deleted=0
+          gh api --paginate "$base/packages/container/$enc/versions?per_page=100" \
+            --jq '.[] | [.id, .updated_at, ((.metadata.container.tags // []) | join(","))] | @tsv' 2>/dev/null \
+          | while IFS=$'\t' read -r id updated tags; do
+              keep=false
+              case ",$tags," in *-latest,*) keep=true ;; esac
+              if [ "$keep" = false ] && { [ -z "$tags" ] || [[ "$updated" < "$cutoff" ]]; }; then
+                if gh api -X DELETE "$base/packages/container/$enc/versions/$id" >/dev/null; then
+                  deleted=$((deleted+1)); echo "  deleted $id (${tags:-untagged}, $updated)"
+                fi
+              else
+                kept=$((kept+1))
+              fi
+            done
+          echo "done"

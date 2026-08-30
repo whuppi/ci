@@ -8,6 +8,14 @@ inputs:
   phase:
     description: "'restore' before build, 'save' after build"
     required: true
+  backend:
+    description: >
+      'gha' = actions/cache (10 GB per repo, LRU-evicted); 'ghcr' = the
+      oci-cache capability (GitHub Container Registry, free and uncapped
+      for public repos). A Gradle home is ~1.3 GB per OS — four of them
+      are half the gha quota, which is why the ghcr backend exists.
+    required: false
+    default: 'gha'
   save:
     description: >
       Whether the 'save' phase may write. GitHub scopes caches to the ref
@@ -21,8 +29,20 @@ inputs:
 runs:
   using: composite
   steps:
+    - name: Restore Gradle cache (ghcr)
+      if: inputs.phase == 'restore' && inputs.backend == 'ghcr'
+      uses: whuppi/ci/actions/capabilities/oci-cache@main
+      with:
+        phase: restore
+        name: gradle
+        key: ${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('example/android/build.gradle.kts', 'example/android/app/build.gradle.kts') }}
+        fallback: ${{ runner.os }}-${{ runner.arch }}-latest
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+
     - name: Restore Gradle cache
-      if: inputs.phase == 'restore'
+      if: inputs.phase == 'restore' && inputs.backend == 'gha'
       id: restore
       uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
@@ -33,13 +53,23 @@ runs:
         restore-keys: gradle-${{ runner.os }}-${{ runner.arch }}-
 
     # The two phases are separate action invocations, so the restore's
-    # exact-hit result crosses to the save phase through the job env.
+    # exact-hit result crosses to the save phase through a file in
+    # RUNNER_TEMP (never GITHUB_ENV — a dynamic write there is a
+    # code-execution surface zizmor rightly refuses).
     - name: Remember the restore result
-      if: inputs.phase == 'restore'
+      if: inputs.phase == 'restore' && inputs.backend == 'gha'
       shell: bash
       env:
         HIT: ${{ steps.restore.outputs.cache-hit }}
-      run: echo "GRADLE_CACHE_EXACT_HIT=${HIT:-false}" >> "$GITHUB_ENV"
+      run: printf '%s' "${HIT:-false}" > "$RUNNER_TEMP/gradle-cache.hit"
+
+    - name: Read the restore result
+      if: inputs.phase == 'save'
+      id: hit
+      shell: bash
+      run: |
+        hit=false; [ -f "$RUNNER_TEMP/gradle-cache.hit" ] && hit="$(cat "$RUNNER_TEMP/gradle-cache.hit")"
+        echo "exact=$hit" >> "$GITHUB_OUTPUT"
 
     # Skip the save after an exact hit: GitHub never overwrites an existing
     # key, so the save would tar ~1 GB (two minutes on Windows) only to be
@@ -47,13 +77,26 @@ runs:
     # NOT exact and still saves — that is how the cache follows a Gradle
     # file change.
     - name: Stop Gradle daemon
-      if: inputs.phase == 'save' && inputs.save == 'true' && env.GRADLE_CACHE_EXACT_HIT != 'true'
+      if: inputs.phase == 'save' && inputs.save == 'true' && steps.hit.outputs.exact != 'true'
       continue-on-error: true
       shell: bash
       run: cd example/android && ./gradlew --stop 2>/dev/null || true
 
+    - name: Save Gradle cache (ghcr)
+      if: inputs.phase == 'save' && inputs.backend == 'ghcr'
+      uses: whuppi/ci/actions/capabilities/oci-cache@main
+      with:
+        phase: save
+        save: ${{ inputs.save }}
+        name: gradle
+        key: ${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('example/android/build.gradle.kts', 'example/android/app/build.gradle.kts') }}
+        fallback: ${{ runner.os }}-${{ runner.arch }}-latest
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+
     - name: Save Gradle cache
-      if: inputs.phase == 'save' && inputs.save == 'true' && env.GRADLE_CACHE_EXACT_HIT != 'true'
+      if: inputs.phase == 'save' && inputs.backend == 'gha' && inputs.save == 'true' && steps.hit.outputs.exact != 'true'
       uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       continue-on-error: true
       with:

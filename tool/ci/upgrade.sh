@@ -106,6 +106,11 @@ asset_urls() {
   printf 'bore\tmacos-arm64\t%s\t%s\n' "$ru/bore-$BORE_VERSION-aarch64-apple-darwin.tar.gz"      "$BORE_SHA256_MACOS_ARM64"
   printf 'bore\twindows-x64\t%s\t%s\n' "$ru/bore-$BORE_VERSION-x86_64-pc-windows-msvc.zip"       "$BORE_SHA256_WINDOWS_X64"
   local cu="https://storage.googleapis.com/chrome-for-testing-public/$CHROME_VERSION"
+  ou="https://github.com/oras-project/oras/releases/download/v$ORAS_VERSION"
+  printf 'oras\tlinux-x64\t%s\t%s\n'   "$ou/oras_${ORAS_VERSION}_linux_amd64.tar.gz"  "$ORAS_SHA256_LINUX_X64"
+  printf 'oras\tmacos-arm64\t%s\t%s\n' "$ou/oras_${ORAS_VERSION}_darwin_arm64.tar.gz" "$ORAS_SHA256_MACOS_ARM64"
+  printf 'oras\tmacos-x64\t%s\t%s\n'   "$ou/oras_${ORAS_VERSION}_darwin_amd64.tar.gz" "$ORAS_SHA256_MACOS_X64"
+  printf 'oras\twindows-x64\t%s\t%s\n' "$ou/oras_${ORAS_VERSION}_windows_amd64.zip"   "$ORAS_SHA256_WINDOWS_X64"
   printf 'chrome\tlinux-x64\t%s\t%s\n'   "$cu/linux64/chrome-linux64.zip"     "$CHROME_SHA256_LINUX_X64"
   printf 'chrome\tmacos-arm64\t%s\t%s\n' "$cu/mac-arm64/chrome-mac-arm64.zip" "$CHROME_SHA256_MACOS_ARM64"
   printf 'chrome\twindows-x64\t%s\t%s\n' "$cu/win64/chrome-win64.zip"         "$CHROME_SHA256_WINDOWS_X64"
@@ -188,6 +193,30 @@ if [ -n "$fvm_latest" ] && [ "$fvm_latest" != "$FVM_VERSION" ]; then
     fi
   else
     drift=1; echo "fvm: $FVM_VERSION -> $fvm_latest (apply fetches + verifies 4 sha256)"
+  fi
+fi
+
+# ── oras (version + 4 verified sha256; actions/capabilities/oci-cache) ──
+oras_latest="$(gh_latest_tag oras-project/oras | sed 's/^v//')"
+if [ -n "$oras_latest" ] && [ "$oras_latest" != "$ORAS_VERSION" ]; then
+  if [ "$MODE" = apply ]; then
+    u="https://github.com/oras-project/oras/releases/download/v$oras_latest"
+    lx="$(sha256_of "$u/oras_${oras_latest}_linux_amd64.tar.gz")"
+    ma="$(sha256_of "$u/oras_${oras_latest}_darwin_arm64.tar.gz")"
+    mx="$(sha256_of "$u/oras_${oras_latest}_darwin_amd64.tar.gz")"
+    win="$(sha256_of "$u/oras_${oras_latest}_windows_amd64.zip")"
+    if [ -n "$lx" ] && [ -n "$ma" ] && [ -n "$mx" ] && [ -n "$win" ]; then
+      drift=1; echo "oras: $ORAS_VERSION -> $oras_latest (+ 4 sha256)"
+      set_kv ORAS_VERSION "$oras_latest" "$VERSIONS"
+      set_kv ORAS_SHA256_LINUX_X64 "$lx" "$VERSIONS"
+      set_kv ORAS_SHA256_MACOS_ARM64 "$ma" "$VERSIONS"
+      set_kv ORAS_SHA256_MACOS_X64 "$mx" "$VERSIONS"
+      set_kv ORAS_SHA256_WINDOWS_X64 "$win" "$VERSIONS"
+    else
+      echo "::error::oras: $oras_latest available but an asset download failed; bump by hand"; blocked=1
+    fi
+  else
+    drift=1; echo "oras: $ORAS_VERSION -> $oras_latest (apply fetches + verifies 4 sha256)"
   fi
 fi
 

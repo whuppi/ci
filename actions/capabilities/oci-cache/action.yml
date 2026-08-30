@@ -1,0 +1,255 @@
+name: OCI Cache
+description: >
+  actions/cache with the GitHub Container Registry as the store. GitHub's
+  Actions cache is capped at 10 GB per repository on the free plan and
+  evicts least-recently-read entries past that; a warm set for a multi-OS
+  matrix (Gradle homes, Flutter SDKs, AVD snapshots) is bigger than the
+  cap, so something is always being rebuilt. GitHub Packages is free for
+  public packages with no size cap, and Actions downloads with GITHUB_TOKEN
+  are free — so the big, stable archives live there as OCI artifacts
+  (one tarball per key, pushed and pulled with oras) and only the caches
+  that need actions/cache's semantics stay on it.
+
+  Two phases, like gradle-cache: `restore` before the work, `save` after.
+  Exact key → hit. An optional `fallback` tag is re-pointed at every save,
+  so it plays the role of actions/cache's restore-keys prefix match.
+  Retention is the consumer's: the reusable oci-cache-prune.yml deletes
+  versions older than N days (fallback tags are never pruned).
+
+  Public packages only: an archive holds build outputs of open-source code
+  and vendored dependencies. Never point this at a path that can contain a
+  credential (~/.ssh, ~/.cargo/credentials.toml, ~/.netrc); the save step
+  refuses those paths by name.
+
+inputs:
+  phase:
+    description: "'restore' before the work, 'save' after it"
+    required: true
+  name:
+    description: >
+      Cache family (gradle, fvm-sdk, avd …). Becomes a tag prefix and the
+      env key that carries the restore result to the save phase.
+    required: true
+  key:
+    description: "Exact key, the same string you would give actions/cache"
+    required: true
+  fallback:
+    description: >
+      Optional floating tag (e.g. gradle-Linux-X64-latest). Restore tries
+      it after an exact miss; save re-points it at the new archive. Leave
+      empty for exact-only families (AVD snapshots).
+    required: false
+    default: ''
+  path:
+    description: "Paths to archive, one per line; ~ is expanded"
+    required: true
+  save:
+    description: >
+      Whether the save phase may write. Same rule as every cache here:
+      the default branch warms, PR runs read.
+    required: false
+    default: 'true'
+  package:
+    description: >
+      Package path under the registry. Default: <owner>/<repo>/cache, which
+      GHCR links to the repository (inherits its visibility and grants the
+      workflow token admin on it).
+    required: false
+    default: ''
+  registry:
+    required: false
+    default: 'ghcr.io'
+
+outputs:
+  cache-hit:
+    description: "'true' on an exact-key hit (restore phase)"
+    value: ${{ steps.restore.outputs.hit }}
+
+runs:
+  using: composite
+  steps:
+    # ── oras, pinned + verified, on every OS (Linux ships one on the
+    # runner image, but an unpinned tool is a tool that changes under CI).
+    - name: Install oras
+      shell: bash
+      run: |
+        set -euo pipefail
+        if command -v oras >/dev/null 2>&1 && [ -f /tmp/.oras-pinned ]; then exit 0; fi
+        CI_ROOT="$GITHUB_ACTION_PATH/../../.."
+        source "$CI_ROOT/tool/versions.env"
+        case "$(uname -s)" in
+          Linux*)  OS=linux ;;
+          Darwin*) OS=macos ;;
+          MINGW*|MSYS*|CYGWIN*) OS=windows ;;
+          *) echo "::error::Unsupported OS: $(uname -s)"; exit 1 ;;
+        esac
+        case "$(uname -m)" in
+          x86_64) ARCH=x64 ;;
+          arm64|aarch64) ARCH=arm64 ;;
+          *) echo "::error::Unsupported arch: $(uname -m)"; exit 1 ;;
+        esac
+        os_up=$(printf '%s' "$OS" | tr '[:lower:]' '[:upper:]')
+        arch_up=$(printf '%s' "$ARCH" | tr '[:lower:]' '[:upper:]')
+        HASH_VAR="ORAS_SHA256_${os_up}_${arch_up}"
+        EXPECTED="${!HASH_VAR:-}"
+        # Release asset names use Go's OS/arch words.
+        case "$OS" in linux) go_os=linux ;; macos) go_os=darwin ;; windows) go_os=windows ;; esac
+        case "$ARCH" in x64) go_arch=amd64 ;; arm64) go_arch=arm64 ;; esac
+        base="https://github.com/oras-project/oras/releases/download/v$ORAS_VERSION"
+        echo "oras $ORAS_VERSION ($OS-$ARCH, pinned, verified)"
+        if [ "$OS" = windows ]; then
+          bash "$CI_ROOT/tool/fetch_verified.sh" "$base/oras_${ORAS_VERSION}_${go_os}_${go_arch}.zip" "$EXPECTED" "$RUNNER_TEMP/oras.zip"
+          mkdir -p /c/oras && unzip -qo "$RUNNER_TEMP/oras.zip" oras.exe -d /c/oras && rm -f "$RUNNER_TEMP/oras.zip"
+          # Fixed literal on GITHUB_PATH (zizmor flags non-static writes); see fvm.
+          echo "C:\oras" >> "$GITHUB_PATH"
+          export PATH="/c/oras:$PATH"
+        else
+          bash "$CI_ROOT/tool/fetch_verified.sh" "$base/oras_${ORAS_VERSION}_${go_os}_${go_arch}.tar.gz" "$EXPECTED" "$RUNNER_TEMP/oras.tar.gz"
+          sudo mkdir -p /opt/oras && sudo tar xzf "$RUNNER_TEMP/oras.tar.gz" -C /opt/oras oras && rm -f "$RUNNER_TEMP/oras.tar.gz"
+          echo "/opt/oras" >> "$GITHUB_PATH"
+          export PATH="/opt/oras:$PATH"
+        fi
+        oras version | head -1
+        touch /tmp/.oras-pinned
+
+    - name: Login
+      shell: bash
+      env:
+        REGISTRY: ${{ inputs.registry }}
+        ACTOR: ${{ github.actor }}
+        TOKEN: ${{ github.token }}
+      run: |
+        set -euo pipefail
+        printf '%s' "$TOKEN" | oras login "$REGISTRY" --username "$ACTOR" --password-stdin >/dev/null
+        echo "logged in to $REGISTRY as $ACTOR"
+
+    # Shared shell for both phases: ref + tag rules + path list. Written to
+    # a file each phase sources, so the two never drift.
+    - name: Resolve reference
+      id: ref
+      shell: bash
+      env:
+        REGISTRY: ${{ inputs.registry }}
+        PACKAGE: ${{ inputs.package }}
+        REPO: ${{ github.repository }}
+        NAME: ${{ inputs.name }}
+        KEY: ${{ inputs.key }}
+        FALLBACK: ${{ inputs.fallback }}
+      run: |
+        set -euo pipefail
+        # Package paths are lowercase on GHCR.
+        pkg="${PACKAGE:-$REPO/cache}"; pkg=$(printf '%s' "$pkg" | tr '[:upper:]' '[:lower:]')
+        # An OCI tag is [A-Za-z0-9_][A-Za-z0-9_.-]{0,127}; keys carry the
+        # family name so two families can never collide on one tag.
+        tag_of() { printf '%s' "$1" | tr -c 'A-Za-z0-9_.\n-' '-' | cut -c1-128 | sed -E 's/^[.-]/_/'; }
+        for v in NAME KEY FALLBACK; do
+          if printf '%s' "${!v}" | grep -q '[^A-Za-z0-9_.-]'; then echo "::warning::oci-cache: $v contains characters outside [A-Za-z0-9_.-]; they become '-'"; fi
+        done
+        key_tag=$(tag_of "$NAME-$KEY")
+        fb_tag=""; [ -n "$FALLBACK" ] && fb_tag=$(tag_of "$NAME-$FALLBACK")
+        {
+          echo "ref=$REGISTRY/$pkg:$key_tag"
+          echo "fallback_ref=${fb_tag:+$REGISTRY/$pkg:$fb_tag}"
+          # The restore result crosses to the save phase (a separate
+          # invocation) through a file in RUNNER_TEMP — never GITHUB_ENV,
+          # whose dynamic writes are a code-execution surface.
+          echo "state=$RUNNER_TEMP/oci-cache/$(printf '%s' "$NAME" | tr -c 'A-Za-z0-9\n' '_').hit"
+        } >> "$GITHUB_OUTPUT"
+        echo "ref: $REGISTRY/$pkg:$key_tag"
+
+    - name: Restore
+      id: restore
+      if: inputs.phase == 'restore'
+      shell: bash
+      env:
+        REF: ${{ steps.ref.outputs.ref }}
+        FALLBACK_REF: ${{ steps.ref.outputs.fallback_ref }}
+        STATE: ${{ steps.ref.outputs.state }}
+      run: |
+        set -euo pipefail
+        # Windows: the work dir goes through cygpath so tar never sees a
+        # "D:/…" path (GNU tar reads that as host:path).
+        tmp="$RUNNER_TEMP"
+        if command -v cygpath >/dev/null 2>&1; then tmp="$(cygpath -u "$RUNNER_TEMP")"; fi
+        work="$tmp/oci-cache-restore"; rm -rf "$work"; mkdir -p "$work"
+        hit=false; used=""
+        if oras pull "$REF" -o "$work" >/dev/null 2>&1; then hit=true; used="$REF"
+        elif [ -n "$FALLBACK_REF" ] && oras pull "$FALLBACK_REF" -o "$work" >/dev/null 2>&1; then used="$FALLBACK_REF"
+        fi
+        if [ -n "$used" ]; then
+          archive=$(find "$work" -maxdepth 1 -type f \( -name 'cache.tzst' -o -name 'cache.tgz' \) | head -1)
+          [ -n "$archive" ] || { echo "::warning::oci-cache: $used holds no archive; treating as miss"; used=""; hit=false; }
+        fi
+        if [ -n "$used" ]; then
+          size=$(du -h "$archive" | cut -f1)
+          # Explicit pipes, not tar's --use-compress-program: GNU tar and
+          # macOS bsdtar disagree on how that program is driven on extract.
+          if [ "${archive##*.}" = tzst ]; then
+            zstd -d -c "$archive" | tar -xPf -
+          else
+            gzip -d -c "$archive" | tar -xPf -
+          fi
+          echo "restored $size from $used (exact: $hit)"
+        else
+          echo "no cache for $REF${FALLBACK_REF:+ or $FALLBACK_REF}"
+        fi
+        rm -rf "$work"
+        echo "hit=$hit" >> "$GITHUB_OUTPUT"
+        mkdir -p "$(dirname "$STATE")"; printf '%s' "$hit" > "$STATE"
+
+    - name: Save
+      if: inputs.phase == 'save' && inputs.save == 'true'
+      shell: bash
+      env:
+        REF: ${{ steps.ref.outputs.ref }}
+        FALLBACK_REF: ${{ steps.ref.outputs.fallback_ref }}
+        STATE: ${{ steps.ref.outputs.state }}
+        PATHS: ${{ inputs.path }}
+        KEY: ${{ inputs.key }}
+        NAME: ${{ inputs.name }}
+      run: |
+        set -euo pipefail
+        # An exact hit means this key already exists with these bytes.
+        if [ -f "$STATE" ] && [ "$(cat "$STATE")" = true ]; then echo "exact hit on restore — nothing to save"; exit 0; fi
+        tmp="$RUNNER_TEMP"
+        if command -v cygpath >/dev/null 2>&1; then tmp="$(cygpath -u "$RUNNER_TEMP")"; fi
+        work="$tmp/oci-cache-save"; rm -rf "$work"; mkdir -p "$work"
+        manifest="$work/manifest.txt"; : > "$manifest"
+        while IFS= read -r p; do
+          p="${p%%#*}"; p="$(printf '%s' "$p" | sed -E 's/^[[:space:]]+|[[:space:]]+$//g')"; [ -n "$p" ] || continue
+          p="${p/#\~/$HOME}"
+          case "$p" in
+            *.ssh*|*credentials*|*.netrc*|*.gnupg*|*.docker/config.json*)
+              echo "::error::oci-cache: refusing to archive a credential-bearing path: $p"; exit 1 ;;
+          esac
+          if command -v cygpath >/dev/null 2>&1; then p="$(cygpath -u "$p")"; fi
+          # Globs are expanded here, not by tar.
+          for m in $p; do
+            [ -e "$m" ] && printf '%s\n' "$m" >> "$manifest"
+          done
+        done <<< "$PATHS"
+        if [ ! -s "$manifest" ]; then echo "::warning::oci-cache: nothing to save for $NAME (no listed path exists)"; exit 0; fi
+        if command -v zstd >/dev/null 2>&1; then
+          archive="$work/cache.tzst"; tar --posix -cPf - --files-from "$manifest" | zstd -T0 -3 -q -o "$archive"
+          media=application/vnd.whuppi.ci-cache.tar+zstd
+        else
+          archive="$work/cache.tgz"; tar --posix -cPf - --files-from "$manifest" | gzip -6 > "$archive"
+          media=application/vnd.whuppi.ci-cache.tar+gzip
+        fi
+        size=$(du -h "$archive" | cut -f1)
+        # Failing to save is a warning, never a red job — the build already
+        # happened. A missing `packages: write` on the caller lands here.
+        if ( cd "$work" && oras push "$REF" \
+              --artifact-type application/vnd.whuppi.ci-cache.v1 \
+              --annotation "org.opencontainers.image.created=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+              --annotation "io.whuppi.ci-cache.key=$KEY" \
+              --annotation "io.whuppi.ci-cache.family=$NAME" \
+              "$(basename "$archive"):$media" >/dev/null ); then
+          echo "saved $size to $REF"
+          if [ -n "$FALLBACK_REF" ]; then
+            oras tag "$REF" "${FALLBACK_REF##*:}" >/dev/null && echo "fallback tag now points here: $FALLBACK_REF"
+          fi
+        else
+          echo "::warning::oci-cache: push to $REF failed (does the job grant packages: write?)"
+        fi
+        rm -rf "$work"

@@ -72,6 +72,14 @@ inputs:
       let the default branch be the warm source everyone reads.
     required: false
     default: 'true'
+  cache-backend:
+    description: >
+      Store for the big caches — Gradle home, Flutter SDK, AVD snapshot:
+      'gha' (actions/cache) or 'ghcr' (oci-cache on the GitHub Container
+      Registry). Public repos pick 'ghcr' to keep the 10 GB gha quota for
+      the archives that need actions/cache's semantics.
+    required: false
+    default: 'gha'
   simulator:
     description: "Boot iOS simulator"
     required: false
@@ -82,6 +90,9 @@ runs:
   steps:
     # ── Always ──
     - uses: whuppi/ci/actions/capabilities/fvm@main
+      with:
+        sdk-cache-backend: ${{ inputs.cache-backend }}
+        cache-save: ${{ inputs.cache-save }}
 
     # ── On demand ──
     - uses: whuppi/ci/actions/capabilities/free-disk-space@main
@@ -104,6 +115,7 @@ runs:
       with:
         phase: restore
         save: ${{ inputs.cache-save }}
+        backend: ${{ inputs.cache-backend }}
 
     - uses: whuppi/ci/actions/capabilities/xcode-cache@main
       if: inputs.xcode-cache == 'true'
@@ -161,9 +173,11 @@ runs:
         script: /tmp/make-run.sh "${{ inputs.make-target }}"
         report-json: ${{ inputs.report-json }}
         avd-cache-save: ${{ inputs.cache-save }}
+        avd-cache-backend: ${{ inputs.cache-backend }}
 
     - uses: whuppi/ci/actions/capabilities/gradle-cache@main
       if: always() && inputs.gradle-cache == 'true'
       with:
         phase: save
         save: ${{ inputs.cache-save }}
+        backend: ${{ inputs.cache-backend }}

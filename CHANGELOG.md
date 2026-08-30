@@ -4,6 +4,26 @@ Releases are cut from the top heading here by `self-release.yml`; consumers pin
 an exact version and upgrade through grouped Dependabot PRs. Versioning rules
 live in the README. Newest first.
 
+## 2.6.0
+
+- Added the `oci-cache` capability: actions/cache semantics (restore / save
+  phases, exact key, a floating fallback tag in place of restore-keys) with
+  the GitHub Container Registry as the store, via a pinned, sha256-verified
+  `oras` on every OS. GitHub Packages is free and uncapped for public
+  packages and Actions pulls with GITHUB_TOKEN are free, so the big, stable
+  archives leave the 10 GB Actions-cache quota. Credential-bearing paths
+  are refused by name. Needs `packages: write` on the job that saves.
+- `gradle-cache` (`backend`), `fvm` (`sdk-cache-backend` + `cache-save`) and
+  `android-emulator` (`avd-cache-backend`) can store on ghcr; `make-target`
+  forwards one `cache-backend`. Default stays `gha` — no consumer changes
+  behaviour until it opts in.
+- Added the `oci-cache-prune.yml` reusable workflow: deletes cache-package
+  versions older than `retention-days` (default 14) and untagged ones;
+  fallback tags are never pruned.
+- Self Check gains an oci-cache round-trip job on all three OSes (save,
+  wipe, exact restore, fallback restore) — the one capability lint cannot
+  prove.
+
 ## 2.5.1
 
 - `gradle-cache` no longer runs its save phase after an exact-key restore
