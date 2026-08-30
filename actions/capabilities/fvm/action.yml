@@ -59,7 +59,7 @@ runs:
 
     - name: Restore Flutter SDK (ghcr)
       if: inputs.sdk-cache-backend == 'ghcr'
-      uses: whuppi/ci/actions/capabilities/oci-cache@main
+      uses: whuppi/ci/actions/capabilities/oci-cache@v2.6.3
       with:
         phase: restore
         name: fvm-sdk
@@ -214,7 +214,7 @@ runs:
     # exact-keyed on .fvmrc, so no fallback tag.
     - name: Save Flutter SDK (ghcr)
       if: inputs.sdk-cache-backend == 'ghcr'
-      uses: whuppi/ci/actions/capabilities/oci-cache@main
+      uses: whuppi/ci/actions/capabilities/oci-cache@v2.6.3
       with:
         phase: save
         save: ${{ inputs.cache-save }}
