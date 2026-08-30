@@ -31,7 +31,7 @@ runs:
   steps:
     - name: Restore Gradle cache (ghcr)
       if: inputs.phase == 'restore' && inputs.backend == 'ghcr'
-      uses: whuppi/ci/actions/capabilities/oci-cache@main
+      uses: whuppi/ci/actions/capabilities/oci-cache@v2.7.3
       with:
         phase: restore
         name: gradle
@@ -84,7 +84,7 @@ runs:
 
     - name: Save Gradle cache (ghcr)
       if: inputs.phase == 'save' && inputs.backend == 'ghcr'
-      uses: whuppi/ci/actions/capabilities/oci-cache@main
+      uses: whuppi/ci/actions/capabilities/oci-cache@v2.7.3
       with:
         phase: save
         save: ${{ inputs.save }}
