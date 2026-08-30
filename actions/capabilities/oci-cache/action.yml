@@ -167,10 +167,10 @@ runs:
         STATE: ${{ steps.ref.outputs.state }}
       run: |
         set -euo pipefail
-        # GNU tar reads "D:/…" as host:path; on Windows the work dir goes
-        # through cygpath and tar gets --force-local.
-        tmp="$RUNNER_TEMP"; local_flag=""
-        if command -v cygpath >/dev/null 2>&1; then tmp="$(cygpath -u "$RUNNER_TEMP")"; local_flag="--force-local"; fi
+        # Windows: the work dir goes through cygpath so tar never sees a
+        # "D:/…" path (GNU tar reads that as host:path).
+        tmp="$RUNNER_TEMP"
+        if command -v cygpath >/dev/null 2>&1; then tmp="$(cygpath -u "$RUNNER_TEMP")"; fi
         work="$tmp/oci-cache-restore"; rm -rf "$work"; mkdir -p "$work"
         hit=false; used=""
         if oras pull "$REF" -o "$work" >/dev/null 2>&1; then hit=true; used="$REF"
@@ -182,10 +182,12 @@ runs:
         fi
         if [ -n "$used" ]; then
           size=$(du -h "$archive" | cut -f1)
+          # Explicit pipes, not tar's --use-compress-program: GNU tar and
+          # macOS bsdtar disagree on how that program is driven on extract.
           if [ "${archive##*.}" = tzst ]; then
-            tar $local_flag --use-compress-program "zstd -T0" -xPf "$archive"
+            zstd -d -c "$archive" | tar -xPf -
           else
-            tar $local_flag -xzPf "$archive"
+            gzip -d -c "$archive" | tar -xPf -
           fi
           echo "restored $size from $used (exact: $hit)"
         else
@@ -209,8 +211,8 @@ runs:
         set -euo pipefail
         # An exact hit means this key already exists with these bytes.
         if [ -f "$STATE" ] && [ "$(cat "$STATE")" = true ]; then echo "exact hit on restore — nothing to save"; exit 0; fi
-        tmp="$RUNNER_TEMP"; local_flag=""
-        if command -v cygpath >/dev/null 2>&1; then tmp="$(cygpath -u "$RUNNER_TEMP")"; local_flag="--force-local"; fi
+        tmp="$RUNNER_TEMP"
+        if command -v cygpath >/dev/null 2>&1; then tmp="$(cygpath -u "$RUNNER_TEMP")"; fi
         work="$tmp/oci-cache-save"; rm -rf "$work"; mkdir -p "$work"
         manifest="$work/manifest.txt"; : > "$manifest"
         while IFS= read -r p; do
@@ -228,10 +230,10 @@ runs:
         done <<< "$PATHS"
         if [ ! -s "$manifest" ]; then echo "::warning::oci-cache: nothing to save for $NAME (no listed path exists)"; exit 0; fi
         if command -v zstd >/dev/null 2>&1; then
-          archive="$work/cache.tzst"; tar $local_flag --posix -cPf "$archive" --use-compress-program "zstd -T0 -3" --files-from "$manifest"
+          archive="$work/cache.tzst"; tar --posix -cPf - --files-from "$manifest" | zstd -T0 -3 -q -o "$archive"
           media=application/vnd.whuppi.ci-cache.tar+zstd
         else
-          archive="$work/cache.tgz"; tar $local_flag --posix -czPf "$archive" --files-from "$manifest"
+          archive="$work/cache.tgz"; tar --posix -cPf - --files-from "$manifest" | gzip -6 > "$archive"
           media=application/vnd.whuppi.ci-cache.tar+gzip
         fi
         size=$(du -h "$archive" | cut -f1)
