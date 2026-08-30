@@ -23,6 +23,7 @@ runs:
   steps:
     - name: Restore Gradle cache
       if: inputs.phase == 'restore'
+      id: restore
       uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: |
@@ -31,14 +32,28 @@ runs:
         key: gradle-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('example/android/build.gradle.kts', 'example/android/app/build.gradle.kts') }}
         restore-keys: gradle-${{ runner.os }}-${{ runner.arch }}-
 
+    # The two phases are separate action invocations, so the restore's
+    # exact-hit result crosses to the save phase through the job env.
+    - name: Remember the restore result
+      if: inputs.phase == 'restore'
+      shell: bash
+      env:
+        HIT: ${{ steps.restore.outputs.cache-hit }}
+      run: echo "GRADLE_CACHE_EXACT_HIT=${HIT:-false}" >> "$GITHUB_ENV"
+
+    # Skip the save after an exact hit: GitHub never overwrites an existing
+    # key, so the save would tar ~1 GB (two minutes on Windows) only to be
+    # refused with "Unable to reserve cache". A restore-keys prefix hit is
+    # NOT exact and still saves — that is how the cache follows a Gradle
+    # file change.
     - name: Stop Gradle daemon
-      if: inputs.phase == 'save' && inputs.save == 'true'
+      if: inputs.phase == 'save' && inputs.save == 'true' && env.GRADLE_CACHE_EXACT_HIT != 'true'
       continue-on-error: true
       shell: bash
       run: cd example/android && ./gradlew --stop 2>/dev/null || true
 
     - name: Save Gradle cache
-      if: inputs.phase == 'save' && inputs.save == 'true'
+      if: inputs.phase == 'save' && inputs.save == 'true' && env.GRADLE_CACHE_EXACT_HIT != 'true'
       uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       continue-on-error: true
       with:
