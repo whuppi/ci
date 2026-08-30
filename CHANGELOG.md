@@ -4,6 +4,13 @@ Releases are cut from the top heading here by `self-release.yml`; consumers pin
 an exact version and upgrade through grouped Dependabot PRs. Versioning rules
 live in the README. Newest first.
 
+## 2.7.1
+
+- `android-emulator`'s SDK cache key read `ImageVersion` from the `env`
+  context, where it does not exist (it is a runner process variable), so
+  the key ended in `-img` and would never roll with a runner-image update.
+  Read in a step; fail loudly if empty.
+
 ## 2.7.0
 
 - `android-emulator` gains `sdk-cache-backend: ghcr`: the emulator,

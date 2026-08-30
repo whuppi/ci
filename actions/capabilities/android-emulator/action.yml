@@ -79,6 +79,18 @@ runs:
     # and the system image all come out of this archive when it hits, and
     # the sdkmanager calls below become no-ops. ImageVersion is the hosted
     # runner image's version — a new image ships new tools, new key.
+    # ImageVersion is a runner PROCESS variable (not in the `env` context),
+    # so it is read in a step; an empty value would freeze the key across
+    # image updates — the exact staleness the key exists to prevent.
+    - name: Runner image version
+      if: inputs.sdk-cache-backend == 'ghcr'
+      id: img
+      shell: bash
+      run: |
+        v="${ImageVersion:-}"
+        [ -n "$v" ] || { echo "::error::ImageVersion is empty on this runner; the SDK cache key cannot roll with image updates"; exit 1; }
+        echo "version=$v" >> "$GITHUB_OUTPUT"
+
     - name: Restore Android SDK components (ghcr)
       if: inputs.sdk-cache-backend == 'ghcr'
       id: sdk-oci
@@ -86,7 +98,7 @@ runs:
       with:
         phase: restore
         name: android-sdk
-        key: ${{ runner.os }}-${{ runner.arch }}-api${{ inputs.api-level }}-aosp_atd-x86_64-img${{ env.ImageVersion }}
+        key: ${{ runner.os }}-${{ runner.arch }}-api${{ inputs.api-level }}-aosp_atd-x86_64-img${{ steps.img.outputs.version }}
         path: |
           ${{ env.ANDROID_HOME }}/emulator
           ${{ env.ANDROID_HOME }}/platform-tools
@@ -487,7 +499,7 @@ runs:
         phase: save
         save: ${{ inputs.avd-cache-save }}
         name: android-sdk
-        key: ${{ runner.os }}-${{ runner.arch }}-api${{ inputs.api-level }}-aosp_atd-x86_64-img${{ env.ImageVersion }}
+        key: ${{ runner.os }}-${{ runner.arch }}-api${{ inputs.api-level }}-aosp_atd-x86_64-img${{ steps.img.outputs.version }}
         path: |
           ${{ env.ANDROID_HOME }}/emulator
           ${{ env.ANDROID_HOME }}/platform-tools
