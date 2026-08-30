@@ -25,6 +25,7 @@ Shared CI for whuppi's Flutter/Dart package repos. Three things live here:
 | `retry.yml` | one auto-retry of a failed run | `workflow_run` |
 | `upgrade-check.yml` | Flutter-SDK + lockfile refresh PRs | `schedule` |
 | `release.yml` | gate → discover → publish to pub.dev | `push` (changelog) |
+| `cache-cleanup.yml` | delete a closed PR's caches (keeps the quota for the default branch) | `pull_request` (closed) |
 
 A caller stub owns the trigger and grants the callee's job permissions:
 

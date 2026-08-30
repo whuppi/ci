@@ -1,10 +1,41 @@
 name: CocoaPods Cache
-description: Cache CocoaPods for iOS builds.
+description: >
+  Cache CocoaPods for iOS builds. Restore always; save only when `save` is
+  true, so PR runs can read the default branch's warm cache without writing
+  archives that only their own ref could ever read.
+
+inputs:
+  save:
+    description: >
+      Whether this run may write the cache. GitHub scopes caches to the ref
+      that wrote them and lets a PR read only its base and the default
+      branch, so a PR's writes are invisible to every other PR and only spend
+      quota. Pass 'false' from PR runs; the default branch warms.
+    required: false
+    default: 'true'
 
 runs:
   using: composite
   steps:
-    - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+    # Two steps, one runs. `actions/cache` saves from its OWN post step —
+    # after the build, on a primary-key miss — which is the only correct
+    # time to snapshot Pods/. A run that must not write uses the
+    # restore-only action, which registers no post step. Never replace this
+    # with `actions/cache/save` at the end of the composite: that is a main
+    # step, it would run right after the restore (before `pod install`) and
+    # save an empty Pods/ under the Podfile's key, blocking the real save
+    # until the Podfile changes.
+    - name: Restore + save CocoaPods cache
+      if: inputs.save == 'true'
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: example/ios/Pods
+        key: pods-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('example/ios/Podfile') }}
+        restore-keys: pods-${{ runner.os }}-${{ runner.arch }}-
+
+    - name: Restore CocoaPods cache (read-only)
+      if: inputs.save != 'true'
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: example/ios/Pods
         key: pods-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('example/ios/Podfile') }}

@@ -62,6 +62,16 @@ inputs:
     description: "Android machine JSON report path (forwarded to android-emulator)"
     required: false
     default: 'test-results/int-android.json'
+  cache-save:
+    description: >
+      Whether this run may WRITE the gradle / xcode / pods / AVD caches
+      (restores are unconditional). GitHub scopes caches to the ref that
+      wrote them and lets a PR read only its base and the default branch,
+      so archives written from a PR ref are invisible to every other PR
+      and only spend quota. Callers pass 'false' on pull_request runs and
+      let the default branch be the warm source everyone reads.
+    required: false
+    default: 'true'
   simulator:
     description: "Boot iOS simulator"
     required: false
@@ -93,15 +103,19 @@ runs:
       if: inputs.gradle-cache == 'true'
       with:
         phase: restore
+        save: ${{ inputs.cache-save }}
 
     - uses: whuppi/ci/actions/capabilities/xcode-cache@main
       if: inputs.xcode-cache == 'true'
       with:
         target: ${{ inputs.xcode-cache-target }}
         key-extra: ${{ inputs.xcode-key-extra }}
+        save: ${{ inputs.cache-save }}
 
     - uses: whuppi/ci/actions/capabilities/pods-cache@main
       if: inputs.pods-cache == 'true'
+      with:
+        save: ${{ inputs.cache-save }}
 
     - uses: whuppi/ci/actions/capabilities/ios-simulator@main
       if: inputs.simulator == 'true'
@@ -146,8 +160,10 @@ runs:
       with:
         script: /tmp/make-run.sh "${{ inputs.make-target }}"
         report-json: ${{ inputs.report-json }}
+        avd-cache-save: ${{ inputs.cache-save }}
 
     - uses: whuppi/ci/actions/capabilities/gradle-cache@main
       if: always() && inputs.gradle-cache == 'true'
       with:
         phase: save
+        save: ${{ inputs.cache-save }}

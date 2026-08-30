@@ -4,6 +4,29 @@ Releases are cut from the top heading here by `self-release.yml`; consumers pin
 an exact version and upgrade through grouped Dependabot PRs. Versioning rules
 live in the README. Newest first.
 
+## 2.5.0
+
+- Added a `save` gate to every cache capability — `gradle-cache`,
+  `pods-cache` (auto-saving `actions/cache` vs restore-only) and `android-emulator`
+  (`avd-cache-save`) — and one `cache-save` input on the shared
+  `make-target` that forwards to all four. Restores are unchanged. GitHub
+  scopes a cache to the ref that wrote it and lets a PR read only its base
+  and the default branch, so an archive written from `refs/pull/N/merge`
+  is invisible to every other PR and only spends quota (a Gradle home is
+  ~1 GB per OS, an AVD snapshot ~1 GB). Callers pass
+  `cache-save: ${{ github.event_name != 'pull_request' }}` so the default
+  branch is the one warm source everyone reads; the defaults keep the old
+  save-always behaviour for callers that pass nothing.
+- `android-emulator` no longer caches or restores an AVD snapshot on
+  Windows: the first warm Windows row (emulator 37.1.11, WHPX) loaded the
+  snapshot and then never answered adb for the whole 600 s boot wait, while
+  the same row cold-boots fine. Windows cold-boots every run (~5 min, green)
+  until the resume is root-caused; Linux/macOS warm boots are unchanged.
+- Added the `cache-cleanup.yml` reusable workflow: on `pull_request:
+  closed` it deletes every cache entry on the PR's merge ref, so dead
+  archives never push live default-branch caches out of the quota.
+  Owner-guarded; skipped for fork PRs (read-only token).
+
 ## 2.4.2
 
 - Fixed the `android-emulator` AVD snapshot cache key never carrying the
