@@ -161,8 +161,13 @@ runs:
         for v in NAME KEY FALLBACK; do
           if printf '%s' "${!v}" | grep -q '[^A-Za-z0-9_.-]'; then echo "::warning::oci-cache: $v contains characters outside [A-Za-z0-9_.-]; they become '-'"; fi
         done
-        key_tag=$(tag_of "$NAME-$KEY")
-        fb_tag=""; [ -n "$FALLBACK" ] && fb_tag=$(tag_of "$NAME-$FALLBACK")
+        # FORMAT is part of every tag. Bump it whenever the way archives are
+        # PRODUCED changes (tar flags, symlink handling, compression): an
+        # exact-key hit never re-saves, so without the bump every existing
+        # tag keeps serving an archive the new restore rules can't use.
+        FORMAT=2
+        key_tag=$(tag_of "v$FORMAT-$NAME-$KEY")
+        fb_tag=""; [ -n "$FALLBACK" ] && fb_tag=$(tag_of "v$FORMAT-$NAME-$FALLBACK")
         {
           echo "ref=$REGISTRY/$pkg:$key_tag"
           echo "fallback_ref=${fb_tag:+$REGISTRY/$pkg:$fb_tag}"
@@ -200,12 +205,19 @@ runs:
           size=$(du -h "$archive" | cut -f1)
           # Explicit pipes, not tar's --use-compress-program: GNU tar and
           # macOS bsdtar disagree on how that program is driven on extract.
+          # A cache that cannot be extracted is a MISS, never a red job —
+          # the build that follows does not depend on it.
           if [ "${archive##*.}" = tzst ]; then
-            zstd -d -c "$archive" | tar -xPf -
+            zstd -d -c "$archive" | tar -xPf - 2>"$work/tar.err" && ok=true || ok=false
           else
-            gzip -d -c "$archive" | tar -xPf -
+            gzip -d -c "$archive" | tar -xPf - 2>"$work/tar.err" && ok=true || ok=false
           fi
-          echo "restored $size from $used (exact: $hit)"
+          if [ "$ok" = true ]; then
+            echo "restored $size from $used (exact: $hit)"
+          else
+            echo "::warning::oci-cache: could not extract $used — treating as a miss ($(head -c 300 "$work/tar.err" | tr '\n' ' '))"
+            hit=false
+          fi
         else
           echo "no cache for $REF${FALLBACK_REF:+ or $FALLBACK_REF}"
         fi
@@ -245,11 +257,15 @@ runs:
           done
         done <<< "$PATHS"
         if [ ! -s "$manifest" ]; then echo "::warning::oci-cache: nothing to save for $NAME (no listed path exists)"; exit 0; fi
+        # Windows: store symlink TARGETS (-h). Git-bash tar cannot create
+        # symlinks on extract (the Flutter SDK has a few), and an archive
+        # is only ever restored on the OS that saved it (the key names it).
+        deref=""; command -v cygpath >/dev/null 2>&1 && deref="-h"
         if command -v zstd >/dev/null 2>&1; then
-          archive="$work/cache.tzst"; tar --posix -cPf - --files-from "$manifest" | zstd -T0 -3 -q -o "$archive"
+          archive="$work/cache.tzst"; tar --posix $deref -cPf - --files-from "$manifest" | zstd -T0 -3 -q -o "$archive"
           media=application/vnd.whuppi.ci-cache.tar+zstd
         else
-          archive="$work/cache.tgz"; tar --posix -cPf - --files-from "$manifest" | gzip -6 > "$archive"
+          archive="$work/cache.tgz"; tar --posix $deref -cPf - --files-from "$manifest" | gzip -6 > "$archive"
           media=application/vnd.whuppi.ci-cache.tar+gzip
         fi
         size=$(du -h "$archive" | cut -f1)
