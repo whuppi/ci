@@ -4,6 +4,13 @@ Releases are cut from the top heading here by `self-release.yml`; consumers pin
 an exact version and upgrade through grouped Dependabot PRs. Versioning rules
 live in the README. Newest first.
 
+## 2.6.1
+
+- `android-emulator` reads the emulator version from the whole
+  `emulator -version` output (stderr included) instead of its first line:
+  a fresh install prints an `.ini` warning first, which left the version
+  empty and failed the row before any AVD work started.
+
 ## 2.6.0
 
 - Added the `oci-cache` capability: actions/cache semantics (restore / save
