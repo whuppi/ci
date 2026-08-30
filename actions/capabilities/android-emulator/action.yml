@@ -103,7 +103,7 @@ runs:
     - name: Restore Android SDK components (ghcr)
       if: inputs.sdk-cache-backend == 'ghcr'
       id: sdk-oci
-      uses: whuppi/ci/actions/capabilities/oci-cache@main
+      uses: whuppi/ci/actions/capabilities/oci-cache@v2.7.2
       with:
         phase: restore
         name: android-sdk
@@ -194,7 +194,7 @@ runs:
     - name: Restore AVD cache (ghcr)
       if: inputs.avd-cache == 'true' && runner.os != 'Windows' && inputs.avd-cache-backend == 'ghcr'
       id: avd-oci
-      uses: whuppi/ci/actions/capabilities/oci-cache@main
+      uses: whuppi/ci/actions/capabilities/oci-cache@v2.7.2
       with:
         phase: restore
         name: avd
@@ -490,7 +490,7 @@ runs:
         runner.os != 'Windows' &&
         inputs.avd-cache == 'true' &&
         inputs.avd-cache-backend == 'ghcr'
-      uses: whuppi/ci/actions/capabilities/oci-cache@main
+      uses: whuppi/ci/actions/capabilities/oci-cache@v2.7.2
       with:
         phase: save
         save: ${{ inputs.avd-cache-save }}
@@ -520,7 +520,7 @@ runs:
     # After the emulator is down: everything the run installed is on disk.
     - name: Save Android SDK components (ghcr)
       if: always() && inputs.sdk-cache-backend == 'ghcr'
-      uses: whuppi/ci/actions/capabilities/oci-cache@main
+      uses: whuppi/ci/actions/capabilities/oci-cache@v2.7.2
       with:
         phase: save
         save: ${{ inputs.avd-cache-save }}
