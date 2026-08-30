@@ -11,6 +11,11 @@ live in the README. Newest first.
   a fresh install prints an `.ini` warning first, which left the version
   empty and failed the row before any AVD work started.
 
+- `fvm` keys the SDK cache on the version named in `.fvmrc`, not on
+  `hashFiles('.fvmrc')`: `fvm install` rewrites the file, so the save
+  landed under a key no restore ever asked for and every run pushed a
+  fresh ~780 MB copy (the duplicate SDK entries on the Actions cache).
+
 ## 2.6.0
 
 - Added the `oci-cache` capability: actions/cache semantics (restore / save

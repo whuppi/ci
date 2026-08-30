@@ -36,12 +36,26 @@ runs:
         key: pub-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pubspec.yaml', 'example/pubspec.yaml') }}
         restore-keys: pub-${{ runner.os }}-${{ runner.arch }}-
 
+    # The SDK key is the version named in .fvmrc, never a hash of the file:
+    # `fvm install` rewrites .fvmrc, so hashFiles('.fvmrc') differs between
+    # the restore before it and the save after it — the save then lands
+    # under a key no restore ever asks for (measured: every run missed and
+    # pushed a fresh 780 MB copy).
+    - name: SDK version
+      id: sdk
+      shell: bash
+      run: |
+        set -euo pipefail
+        v=$(jq -r '.flutter // empty' .fvmrc)
+        [ -n "$v" ] || { echo "::error::.fvmrc names no flutter version"; exit 1; }
+        echo "version=$v" >> "$GITHUB_OUTPUT"
+
     - name: Cache Flutter SDK (FVM)
       if: inputs.sdk-cache-backend == 'gha'
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ~/.fvm_cache
-        key: fvm-sdk-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.fvmrc') }}
+        key: fvm-sdk-${{ runner.os }}-${{ runner.arch }}-${{ steps.sdk.outputs.version }}
 
     - name: Restore Flutter SDK (ghcr)
       if: inputs.sdk-cache-backend == 'ghcr'
@@ -49,7 +63,7 @@ runs:
       with:
         phase: restore
         name: fvm-sdk
-        key: ${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.fvmrc') }}
+        key: ${{ runner.os }}-${{ runner.arch }}-${{ steps.sdk.outputs.version }}
         path: ~/.fvm_cache
 
     - name: Install FVM + project SDK
@@ -205,5 +219,5 @@ runs:
         phase: save
         save: ${{ inputs.cache-save }}
         name: fvm-sdk
-        key: ${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.fvmrc') }}
+        key: ${{ runner.os }}-${{ runner.arch }}-${{ steps.sdk.outputs.version }}
         path: ~/.fvm_cache
