@@ -4,6 +4,14 @@ Releases are cut from the top heading here by `self-release.yml`; consumers pin
 an exact version and upgrade through grouped Dependabot PRs. Versioning rules
 live in the README. Newest first.
 
+## 2.7.3
+
+- `android-emulator`: Windows resumes its AVD snapshot from the ghcr
+  backend like Linux and macOS. The earlier Windows resume failure was a
+  snapshot taken on a system image the SDK archive never pinned (2.7.2
+  fixed both); a miss now cold-boots with snapshots on so the quick-boot
+  snapshot is written on kill and archived.
+
 ## 2.7.2
 
 - `android-emulator`'s ghcr SDK archive was never saved: its paths were
