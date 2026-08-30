@@ -28,6 +28,13 @@ Shared CI for whuppi's Flutter/Dart package repos. Three things live here:
 | `cache-cleanup.yml` | delete a closed PR's caches (keeps the quota for the default branch) | `pull_request` (closed) |
 | `oci-cache-prune.yml` | delete old versions of the ghcr cache package (`oci-cache` retention) | `schedule`, `workflow_dispatch` |
 
+`oci-cache` (used via `cache-backend: ghcr` on `make-target`) is for **public
+repositories only** — it refuses to run in a private one. The package GHCR
+creates on a repo's first push (`ghcr.io/<owner>/<repo>/cache`) starts
+**private** even for a public repo; the owner flips it to Public once in the
+package's settings (no API exists), after which storage and Actions pulls are
+free and uncapped. Jobs that save need `packages: write`.
+
 A caller stub owns the trigger and grants the callee's job permissions:
 
 ```yaml

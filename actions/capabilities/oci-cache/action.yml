@@ -16,8 +16,13 @@ description: >
   Retention is the consumer's: the reusable oci-cache-prune.yml deletes
   versions older than N days (fallback tags are never pruned).
 
-  Public packages only: an archive holds build outputs of open-source code
-  and vendored dependencies. Never point this at a path that can contain a
+  Public packages only, in two senses: the capability refuses to run in a
+  private repository, and the package GHCR creates on the FIRST push starts
+  private regardless of the repo — an owner flips it to Public once, in
+  the package's settings page (there is no API for it). Until that click
+  the archives still work (the workflow token reads them) but count
+  against the package-storage allowance. An archive holds build outputs of
+  open-source code and vendored dependencies. Never point this at a path that can contain a
   credential (~/.ssh, ~/.cargo/credentials.toml, ~/.netrc); the save step
   refuses those paths by name.
 
@@ -68,6 +73,17 @@ outputs:
 runs:
   using: composite
   steps:
+    # Public repositories only. A package first pushed from a private repo
+    # is private, counts against the plan's package-storage allowance and
+    # is exactly what this capability exists to avoid. Refuse loudly rather
+    # than create one: a private repo keeps `backend: gha`.
+    - name: Public repository check
+      if: github.event.repository.private == true
+      shell: bash
+      run: |
+        echo "::error::oci-cache: this repository is private; ghcr storage is free and uncapped only for public packages. Use backend 'gha' here."
+        exit 1
+
     # ── oras, pinned + verified, on every OS (Linux ships one on the
     # runner image, but an unpinned tool is a tool that changes under CI).
     - name: Install oras

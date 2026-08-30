@@ -4,6 +4,13 @@ Releases are cut from the top heading here by `self-release.yml`; consumers pin
 an exact version and upgrade through grouped Dependabot PRs. Versioning rules
 live in the README. Newest first.
 
+## 2.6.2
+
+- `oci-cache` refuses to run in a private repository (a package first pushed
+  from one is private and counts against the plan's package storage — the
+  opposite of what the capability is for). README documents the one-time
+  visibility flip a public repo's owner makes after the first push.
+
 ## 2.6.1
 
 - `android-emulator` reads the emulator version from the whole
