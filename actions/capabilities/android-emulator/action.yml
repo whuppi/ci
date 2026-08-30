@@ -184,15 +184,14 @@ runs:
 
     # restore/save split (not the auto-saving actions/cache) so the write is
     # one gated step at the end, after the emulator has been killed.
-    # Linux/macOS only. A Windows snapshot restores "successfully" and then
-    # the guest never answers adb (port 5554 refused for the full 600 s
-    # boot wait; measured on the first warm Windows row after the key fix,
-    # emulator 37.1.11, WHPX), while the same row cold-boots fine. Until
-    # that is root-caused, Windows cold-boots every run — slower (~5 min)
-    # but green. Do not re-enable Windows here without a warm run that
-    # proves the resume.
+    # Windows resumes through the ghcr backend only. Its first warm run
+    # (emulator 37.1.11, WHPX) restored a snapshot whose guest never
+    # answered adb; that snapshot had been taken on a system image the SDK
+    # archive never pinned (its paths were empty then), so the AVD key now
+    # carries the image revision and the archive pins the image. The gha
+    # backend on Windows was never proven and stays off.
     - name: Restore AVD cache (ghcr)
-      if: inputs.avd-cache == 'true' && runner.os != 'Windows' && inputs.avd-cache-backend == 'ghcr'
+      if: inputs.avd-cache == 'true' && inputs.avd-cache-backend == 'ghcr'
       id: avd-oci
       uses: whuppi/ci/actions/capabilities/oci-cache@main
       with:
@@ -422,10 +421,20 @@ runs:
 
         ADB="$SDK/platform-tools/adb -s emulator-5554"
 
-        # Boot emulator (matches action's launchEmulator). Always a cold
-        # boot on Windows — see the AVD cache restore step: a restored
-        # snapshot never comes up for adb here.
-        SNAP_FLAG="-no-snapshot"
+        # Boot emulator (matches action's launchEmulator). A restored
+        # snapshot resumes and is never re-saved (-no-snapshot-save); a
+        # miss cold-boots with snapshots ON so `emu kill` writes the
+        # quick-boot snapshot the save step archives — the Linux/macOS
+        # generate step does the same through the action. cold-boot: true
+        # ignores the snapshot entirely.
+        if [ "$INPUTS_COLD_BOOT" = "true" ]; then
+          SNAP_FLAG="-no-snapshot"
+        elif [ "$AVD_RESTORED" = "true" ]; then
+          SNAP_FLAG="-no-snapshot-save"
+        else
+          SNAP_FLAG=""
+        fi
+        echo "snapshot flag: ${SNAP_FLAG:-<save quick-boot snapshot on kill>}"
         "$SDK/emulator/emulator" -port 5554 -avd test \
           $SNAP_FLAG -no-window -noaudio -no-boot-anim &
 
@@ -470,6 +479,8 @@ runs:
         bash -c "$INPUTS_SCRIPT"
       env:
         INPUTS_API_LEVEL: ${{ inputs.api-level }}
+        INPUTS_COLD_BOOT: ${{ inputs.cold-boot }}
+        AVD_RESTORED: ${{ steps.avd-oci.outputs.cache-hit }}
         INPUTS_SCRIPT: ${{ inputs.script }}
 
     # ── Cleanup ──
@@ -487,7 +498,6 @@ runs:
     - name: Save AVD cache (ghcr)
       if: >-
         always() &&
-        runner.os != 'Windows' &&
         inputs.avd-cache == 'true' &&
         inputs.avd-cache-backend == 'ghcr'
       uses: whuppi/ci/actions/capabilities/oci-cache@main
