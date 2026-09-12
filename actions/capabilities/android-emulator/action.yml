@@ -147,7 +147,11 @@ runs:
         IMG_PKG="system-images;android-${API};aosp_atd;x86_64"
         IMG_PROPS="$SDK/system-images/android-${API}/aosp_atd/x86_64/source.properties"
         if [ ! -f "$EMU" ] && [ ! -f "$EMU.exe" ] || [ ! -f "$IMG_PROPS" ]; then
-          SDKMGR="$(find "$SDK/cmdline-tools" -name "sdkmanager*" -type f | head -1)"
+          # The launcher lives at cmdline-tools/<version>/bin/sdkmanager. A
+          # name glob also matches lib/sdkmanager-classpath.jar, and bash
+          # then executes a zip archive — match the bin/ path, never the name.
+          SDKMGR="$(find "$SDK/cmdline-tools" -path '*/bin/sdkmanager' -type f | head -1)"
+          [ -n "$SDKMGR" ] || { echo "::error::sdkmanager launcher not found under $SDK/cmdline-tools"; exit 1; }
           yes | "$SDKMGR" --licenses > /dev/null 2>&1 || true
           "$SDKMGR" "emulator" "platform-tools" "$IMG_PKG" > /dev/null
         fi
@@ -392,7 +396,10 @@ runs:
       shell: bash
       run: |
         SDK="$(cygpath "$ANDROID_HOME")"
-        SDKMGR="$(find "$SDK/cmdline-tools" -name "sdkmanager*" -type f | head -1)"
+        # Windows ships the launcher as bin/sdkmanager.bat; match the bin/
+        # path (a name glob also matches lib/sdkmanager-classpath.jar).
+        SDKMGR="$(find "$SDK/cmdline-tools" -path '*/bin/sdkmanager.bat' -type f | head -1)"
+        [ -n "$SDKMGR" ] || { echo "::error::sdkmanager.bat not found under $SDK/cmdline-tools"; exit 1; }
         yes | "$SDKMGR" --licenses > /dev/null 2>&1 || true
         "$SDKMGR" --install \
           "build-tools;36.0.0" \
@@ -414,7 +421,8 @@ runs:
         # with force-avd-creation: false — checks avd directory).
         AVD_DIR="$HOME/.android/avd/test.avd"
         if [ ! -d "$AVD_DIR" ]; then
-          AVDMGR="$(find "$SDK/cmdline-tools" -name "avdmanager*" -type f | head -1)"
+          AVDMGR="$(find "$SDK/cmdline-tools" -path '*/bin/avdmanager.bat' -type f | head -1)"
+          [ -n "$AVDMGR" ] || { echo "::error::avdmanager.bat not found under $SDK/cmdline-tools"; exit 1; }
           echo no | "$AVDMGR" create avd --force -n test \
             --package "system-images;android-${INPUTS_API_LEVEL};aosp_atd;x86_64"
         fi
