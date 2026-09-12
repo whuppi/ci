@@ -207,10 +207,20 @@ runs:
           # macOS bsdtar disagree on how that program is driven on extract.
           # A cache that cannot be extracted is a MISS, never a red job —
           # the build that follows does not depend on it.
+          #
+          # Directories that already exist keep their metadata. An archive
+          # may land inside a tree the runner user can write into but does
+          # not own (the hosted image's Android SDK root is root-owned):
+          # GNU tar's final step restores each directory's mode and mtime,
+          # which fails with EPERM on such a directory and turns a good
+          # restore into a miss every run. GNU-only flag; bsdtar (macOS)
+          # leaves existing directories alone already.
+          keep_dirs=""
+          if tar --version 2>/dev/null | grep -q "GNU tar"; then keep_dirs="--no-overwrite-dir"; fi
           if [ "${archive##*.}" = tzst ]; then
-            zstd -d -c "$archive" | tar -xPf - 2>"$work/tar.err" && ok=true || ok=false
+            zstd -d -c "$archive" | tar $keep_dirs -xPf - 2>"$work/tar.err" && ok=true || ok=false
           else
-            gzip -d -c "$archive" | tar -xPf - 2>"$work/tar.err" && ok=true || ok=false
+            gzip -d -c "$archive" | tar $keep_dirs -xPf - 2>"$work/tar.err" && ok=true || ok=false
           fi
           if [ "$ok" = true ]; then
             echo "restored $size from $used (exact: $hit)"

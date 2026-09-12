@@ -4,6 +4,16 @@ Releases are cut from the top heading here by `self-release.yml`; consumers pin
 an exact version and upgrade through grouped Dependabot PRs. Versioning rules
 live in the README. Newest first.
 
+## 2.7.6
+
+- `oci-cache`: a restore into a tree the runner can write into but does
+  not own (the hosted Linux image's Android SDK root is root-owned) failed
+  on GNU tar's final step — restoring mode and mtime on the existing
+  directories — and was treated as a miss on every run, so the Android
+  SDK archive re-downloaded and re-pushed each time. GNU tar restores now
+  keep existing directories' metadata (`--no-overwrite-dir`); bsdtar on
+  macOS already did.
+
 ## 2.7.5
 
 - `android-emulator` located `sdkmanager` (and, on Windows, `avdmanager`)
