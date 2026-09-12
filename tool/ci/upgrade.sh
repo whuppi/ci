@@ -10,7 +10,7 @@ set -euo pipefail
 #   fvm tool      FVM_VERSION + 4 sha256         leoafarias/fvm
 #   Chrome        CHROME_VERSION + 6 sha256      chrome-for-testing (Stable)
 #   bore          BORE_VERSION + 3 sha256        ekzhang/bore
-#   zizmor gate   ZIZMOR_VERSION                 PyPI
+#   zizmor gate   ZIZMOR_VERSION                 PyPI (ZIZMOR_HOLD_BELOW caps it)
 #   actionlint    ACTIONLINT_VERSION             rhysd/actionlint
 #   pinact        PINACT_VERSION                 suzuki-shunsuke/pinact
 #
@@ -53,6 +53,18 @@ gh_latest_tag() {  # owner/repo -> latest release tag, verbatim
 # Hardened GET for the fetches below: fail-closed, capped redirects, and a
 # few retries so a transient blip doesn't fail the daily run.
 _fetch() { curl -fsSL --retry 3 --retry-delay 2 --max-redirs 5 --connect-timeout 10 --max-time 30 "$@"; }
+
+version_lt() {  # a b -> true when dotted version a < b (numeric per field; BSD-safe, no version-sort flag)
+  local IFS=. i a b
+  read -ra a <<< "$1"; read -ra b <<< "$2"
+  for ((i = 0; i < ${#a[@]} || i < ${#b[@]}; i++)); do
+    local x="${a[i]:-0}" y="${b[i]:-0}"
+    x="${x%%[!0-9]*}"; y="${y%%[!0-9]*}"
+    if ((10#${x:-0} < 10#${y:-0})); then return 0; fi
+    if ((10#${x:-0} > 10#${y:-0})); then return 1; fi
+  done
+  return 1
+}
 
 # sha256 of a downloadable asset, or empty on failure. Downloads to a file
 # (never a shell var) so binary content survives intact and a 404 can't
@@ -222,6 +234,12 @@ fi
 
 # ── zizmor gate (ZIZMOR_VERSION in versions.env; run in pr-checks.yml) ──
 ziz_latest="$(_fetch https://pypi.org/pypi/zizmor/json 2>/dev/null | jq -r '.info.version // empty' 2>/dev/null || true)"
+# A held pin: nothing at or above ZIZMOR_HOLD_BELOW is proposed (the
+# reason lives next to the pin in versions.env).
+if [ -n "${ZIZMOR_HOLD_BELOW:-}" ] && [ -n "$ziz_latest" ] && ! version_lt "$ziz_latest" "$ZIZMOR_HOLD_BELOW"; then
+  echo "zizmor: $ziz_latest available, held below $ZIZMOR_HOLD_BELOW (see versions.env)"
+  ziz_latest=""
+fi
 if [ -n "$ZIZMOR_VERSION" ] && [ -n "$ziz_latest" ] && [ "$ZIZMOR_VERSION" != "$ziz_latest" ]; then
   drift=1
   echo "zizmor: $ZIZMOR_VERSION -> $ziz_latest"

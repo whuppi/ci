@@ -4,6 +4,16 @@ Releases are cut from the top heading here by `self-release.yml`; consumers pin
 an exact version and upgrade through grouped Dependabot PRs. Versioning rules
 live in the README. Newest first.
 
+## 2.7.4
+
+- Pinned versions bumped (fvm 4.3.0 → 4.3.1, chrome 152.0.7977.64 →
+  153.0.8010.36); sha256s recomputed from the upstream release assets.
+- zizmor is held at 1.29.0 (`ZIZMOR_HOLD_BELOW` in `tool/versions.env`,
+  honored by `upgrade.sh`): 1.30 adds a `self-repository` audit that wants
+  in-repo actions referenced as `uses: $/…`, and actionlint 1.7.12 rejects
+  that form (rhysd/actionlint#711) — no spelling passes both gates. The
+  hold lifts when actionlint accepts `$/`.
+
 ## 2.7.3
 
 - `android-emulator`: Windows resumes its AVD snapshot from the ghcr
