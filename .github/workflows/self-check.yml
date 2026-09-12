@@ -83,9 +83,8 @@ jobs:
       - name: Parse every action.yml
         shell: bash
         run: |
-          files=$(git ls-files 'actions/*/action.yml' 'actions/*/*/action.yml')
-          # shellcheck disable=SC2086
-          python3 -c 'import sys, yaml; [yaml.safe_load(open(f)) for f in sys.argv[1:]]; print("YAML parse OK (%d action files)" % (len(sys.argv) - 1))' $files
+          git ls-files 'actions/*/action.yml' 'actions/*/*/action.yml' \
+            | xargs python3 -c 'import sys, yaml; [yaml.safe_load(open(f)) for f in sys.argv[1:]]; print("YAML parse OK (%d action files)" % (len(sys.argv) - 1))'
 
   internal-refs-are-main:
     name: Internal refs are @main

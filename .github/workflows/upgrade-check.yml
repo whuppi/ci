@@ -333,9 +333,13 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          # shellcheck disable=SC1091
-          source .whuppi-ci/tool/versions.env
-          go install "github.com/suzuki-shunsuke/pinact/v4/cmd/pinact@v$PINACT_VERSION"
+          # One value is needed; read it instead of executing the pin file.
+          PINACT_VERSION=$(sed -n 's/^PINACT_VERSION="\(.*\)"$/\1/p' .whuppi-ci/tool/versions.env)
+          [ -n "$PINACT_VERSION" ] || { echo "PINACT_VERSION missing from versions.env" >&2; exit 1; }
+          # The Go module path carries the major version; derive it from the pin
+          # so a major bump (v4 → v5) cannot leave the path pointing at the old
+          # module while the tag names the new one.
+          go install "github.com/suzuki-shunsuke/pinact/v${PINACT_VERSION%%.*}/cmd/pinact@v$PINACT_VERSION"
           PATH="$(go env GOPATH)/bin:$PATH"
           # ALL action files — workflows AND composite action.yml. One owner for
           # every third-party ref, no split with Dependabot (which is left owning

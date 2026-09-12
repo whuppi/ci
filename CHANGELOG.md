@@ -7,12 +7,22 @@ live in the README. Newest first.
 ## 2.7.4
 
 - Pinned versions bumped (fvm 4.3.0 → 4.3.1, chrome 152.0.7977.64 →
-  153.0.8010.36); sha256s recomputed from the upstream release assets.
+  153.0.8010.36, pinact 4.1.1 → 5.0.0); sha256s recomputed from the
+  upstream release assets. `upgrade-check.yml` derives pinact's Go module
+  major from the pin instead of hardcoding `v4`, which the 5.0.0 bump would
+  have broken.
 - zizmor is held at 1.29.0 (`ZIZMOR_HOLD_BELOW` in `tool/versions.env`,
   honored by `upgrade.sh`): 1.30 adds a `self-repository` audit that wants
   in-repo actions referenced as `uses: $/…`, and actionlint 1.7.12 rejects
   that form (rhysd/actionlint#711) — no spelling passes both gates. The
   hold lifts when actionlint accepts `$/`.
+- `lint_shell.sh` gains a sixth check: no inline lint suppression in any
+  tracked file (shellcheck, zizmor, actionlint, Dart analyzer, Python
+  markers; Markdown excepted, config-file policy out of scope). The rule
+  "fix the cause, never silence the finding" had no wall; the six
+  suppressions the fleet carried are fixed at their cause in this release
+  (explicit word-splitting via arrays; one value read from `versions.env`
+  instead of sourcing it).
 
 ## 2.7.3
 
