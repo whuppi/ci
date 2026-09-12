@@ -4,6 +4,16 @@ Releases are cut from the top heading here by `self-release.yml`; consumers pin
 an exact version and upgrade through grouped Dependabot PRs. Versioning rules
 live in the README. Newest first.
 
+## 2.7.5
+
+- `android-emulator` located `sdkmanager` (and, on Windows, `avdmanager`)
+  by a name glob under `cmdline-tools/`, which also matches
+  `lib/sdkmanager-classpath.jar`; on the current runner image `find`
+  listed the jar first and bash executed a zip archive, so every cold
+  Android row died in the emulator-version step and the SDK archive for
+  the new image could never be saved. The launchers are now matched by
+  their `bin/` path, and a missing launcher is a clear error.
+
 ## 2.7.4
 
 - Pinned versions bumped (fvm 4.3.0 → 4.3.1, chrome 152.0.7977.64 →
