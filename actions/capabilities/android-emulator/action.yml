@@ -147,10 +147,11 @@ runs:
         IMG_PKG="system-images;android-${API};aosp_atd;x86_64"
         IMG_PROPS="$SDK/system-images/android-${API}/aosp_atd/x86_64/source.properties"
         if [ ! -f "$EMU" ] && [ ! -f "$EMU.exe" ] || [ ! -f "$IMG_PROPS" ]; then
-          # The launcher lives at cmdline-tools/<version>/bin/sdkmanager. A
-          # name glob also matches lib/sdkmanager-classpath.jar, and bash
-          # then executes a zip archive — match the bin/ path, never the name.
-          SDKMGR="$(find "$SDK/cmdline-tools" -path '*/bin/sdkmanager' -type f | head -1)"
+          # The launcher lives at cmdline-tools/<version>/bin/sdkmanager, and
+          # at bin/sdkmanager.bat on Windows. A name glob also matches
+          # lib/sdkmanager-classpath.jar, and bash then executes a zip
+          # archive — match the bin/ path, never the name.
+          SDKMGR="$(find "$SDK/cmdline-tools" \( -path '*/bin/sdkmanager' -o -path '*/bin/sdkmanager.bat' \) -type f | head -1)"
           [ -n "$SDKMGR" ] || { echo "::error::sdkmanager launcher not found under $SDK/cmdline-tools"; exit 1; }
           yes | "$SDKMGR" --licenses > /dev/null 2>&1 || true
           "$SDKMGR" "emulator" "platform-tools" "$IMG_PKG" > /dev/null
