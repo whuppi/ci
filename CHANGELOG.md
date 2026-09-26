@@ -4,6 +4,17 @@ Releases are cut from the top heading here by `self-release.yml`; consumers pin
 an exact version and upgrade through grouped Dependabot PRs. Versioning rules
 live in the README. Newest first.
 
+## 2.7.7
+
+- `android-emulator`: 2.7.5 matched the `sdkmanager` launcher by
+  `bin/sdkmanager` in the emulator-version step, which the Windows runner
+  ships as `bin/sdkmanager.bat`, so a Windows Android row that had to
+  install the emulator or its system image died with "sdkmanager launcher
+  not found". The step now matches both names.
+- Pinned versions bumped (chrome 153.0.8010.36 → 154.0.8037.57);
+  sha256s recomputed from the upstream release assets.
+- `actions/setup-java` bumped from 6.0.0 to 6.0.1 in the `java` capability.
+
 ## 2.7.6
 
 - `oci-cache`: a restore into a tree the runner can write into but does
