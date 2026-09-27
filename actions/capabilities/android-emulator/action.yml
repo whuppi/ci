@@ -297,17 +297,50 @@ runs:
         # Killing DDS can sever the harness tally after tests ran but before
         # they were counted, so the "N passed" summary and the exit code both
         # undercount (fire-and-forget DDS shutdown, flutter#187984).
+        #
+        # DDS is not always dartvm's child: from Dart 3.13.4 on macOS x64 the
+        # `dart` launcher starts DDS in a second process and exits, leaving a
+        # zombie under dartvm and DDS under PID 1. So the signature is: dartvm
+        # has no live child (zombies do not count), and a DDS that is its child
+        # or an orphan is idle. It must hold on two ticks in a row with no
+        # new output in the log between them: an orphaned DDS lives for the
+        # whole run, and dartvm is childless for stretches mid-test too.
+        DDS_IDLE_PREV=""
+        DDS_LOG_PREV=""
         kill_stuck_dds() {
+          local dvmpid kid stat live cand pid cpu idle="" size
+          size=$(wc -c < "$OUT" | tr -d ' ')
+          if [ "$size" != "$DDS_LOG_PREV" ]; then
+            DDS_LOG_PREV="$size"
+            DDS_IDLE_PREV=""
+            return 0
+          fi
           for dvmpid in $(pgrep -f dartvm 2>/dev/null); do
-            local kids; kids=$(pgrep -P "$dvmpid" 2>/dev/null)
-            [ "$(grep -c . <<< "$kids")" -eq 1 ] || continue
-            ps -p "$kids" -o args= 2>/dev/null | grep -q development-service || continue
-            local cpu; cpu=$(ps -p "$kids" -o %cpu= 2>/dev/null | tr -d ' ')
-            echo "${cpu:-1}" | awk '{ exit ($1 > 0.5) }' || continue
-            echo "=== WATCHDOG: stuck DDS at teardown (PID $kids, cpu=${cpu}%)."
-            echo "    Sole idle dartvm child = dispose() hung on DDS. Killing. ==="
-            kill -9 "$kids" 2>/dev/null || true
+            live=0; cand=""
+            for kid in $(pgrep -P "$dvmpid" 2>/dev/null); do
+              stat=$(ps -p "$kid" -o stat= 2>/dev/null)
+              case "$stat" in Z*|"") continue ;; esac
+              if ps -p "$kid" -o args= 2>/dev/null | grep -q development-service; then
+                cand="$cand $kid"
+              else
+                live=1
+              fi
+            done
+            [ "$live" = 0 ] || continue
+            for pid in $(pgrep -f development-service 2>/dev/null); do
+              [ "$(ps -p "$pid" -o ppid= 2>/dev/null | tr -d ' ')" = 1 ] && cand="$cand $pid"
+            done
+            for pid in $cand; do
+              cpu=$(ps -p "$pid" -o %cpu= 2>/dev/null | tr -d ' ')
+              echo "${cpu:-1}" | awk '{ exit ($1 > 0.5) }' || continue
+              idle="$idle $pid"
+              case " $DDS_IDLE_PREV " in *" $pid "*) ;; *) continue ;; esac
+              echo "=== WATCHDOG: stuck DDS at teardown (PID $pid, cpu=${cpu}%)."
+              echo "    dartvm has no live child and DDS is idle = dispose() hung on DDS. Killing. ==="
+              kill -9 "$pid" 2>/dev/null || true
+            done
           done
+          DDS_IDLE_PREV="$idle"
         }
         # Append the watchdog's "WATCHDOG:" kill lines to the same log (EOF-atomic,
         # no clobber). They stream live via the tail, and the reconciler reads
