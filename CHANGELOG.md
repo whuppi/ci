@@ -4,6 +4,16 @@ Releases are cut from the top heading here by `self-release.yml`; consumers pin
 an exact version and upgrade through grouped Dependabot PRs. Versioning rules
 live in the README. Newest first.
 
+## 2.7.8
+
+- `android-emulator`: from Dart 3.13.4 (Flutter 3.47.5) on macOS x64, the
+  `dart` launcher starts the Dart Development Service in a second process
+  and exits, so DDS runs as an orphan instead of a child of `flutter test`.
+  The teardown watchdog only looked for DDS as the child, so the DDS
+  teardown hang (flutter#187984) ran until the job timed out. It now also
+  kills an orphaned DDS, but only when `flutter test` has no live child and
+  the test log has been silent for two ticks in a row.
+
 ## 2.7.7
 
 - `android-emulator`: 2.7.5 matched the `sdkmanager` launcher by
