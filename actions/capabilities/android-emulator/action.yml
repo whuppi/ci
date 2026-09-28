@@ -151,7 +151,7 @@ runs:
           # at bin/sdkmanager.bat on Windows. A name glob also matches
           # lib/sdkmanager-classpath.jar, and bash then executes a zip
           # archive — match the bin/ path, never the name.
-          SDKMGR="$(find "$SDK/cmdline-tools" \( -path '*/bin/sdkmanager' -o -path '*/bin/sdkmanager.bat' \) -type f | head -1)"
+          SDKMGR="$(find "$SDK/cmdline-tools" \( -path '*/bin/sdkmanager' -o -path '*/bin/sdkmanager.bat' \) -type f | sed -n 1p)"
           [ -n "$SDKMGR" ] || { echo "::error::sdkmanager launcher not found under $SDK/cmdline-tools"; exit 1; }
           yes | "$SDKMGR" --licenses > /dev/null 2>&1 || true
           "$SDKMGR" "emulator" "platform-tools" "$IMG_PKG" > /dev/null
@@ -160,12 +160,12 @@ runs:
         # execution: `emulator -version` on a fresh Linux install printed
         # nothing parseable twice in a row (it wants a display / KVM to get
         # that far). Fall back to running it only when the file is missing.
-        VER=$(grep -oE '^Pkg\.Revision=[0-9]+\.[0-9]+\.[0-9]+' "$SDK/emulator/source.properties" 2>/dev/null | head -1 | cut -d= -f2 || true)
+        VER=$(grep -oE '^Pkg\.Revision=[0-9]+\.[0-9]+\.[0-9]+' "$SDK/emulator/source.properties" 2>/dev/null | sed -n 1p | cut -d= -f2 || true)
         if [ -z "$VER" ]; then
-          VER=$("$EMU" -version 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)
+          VER=$("$EMU" -version 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | sed -n 1p || true)
         fi
         if [ -z "$VER" ]; then
-          echo "--- emulator -version output ---"; "$EMU" -version 2>&1 | head -20 || true
+          echo "--- emulator -version output ---"; "$EMU" -version 2>&1 | sed -n '1,20p' || true
         fi
         if [ -z "$VER" ]; then
           echo "::error::Android emulator version could not be read from $EMU — the AVD cache key would be unversioned"
@@ -179,7 +179,7 @@ runs:
         # Linux rows, measured 2026-08-30). The image revision is part of
         # what the snapshot IS, so it is part of the key; the SDK archive
         # pins the same revision on every run, so the pair stays matched.
-        IMG=$(grep -oE '^Pkg\.Revision=[0-9]+' "$IMG_PROPS" 2>/dev/null | head -1 | cut -d= -f2 || true)
+        IMG=$(grep -oE '^Pkg\.Revision=[0-9]+' "$IMG_PROPS" 2>/dev/null | sed -n 1p | cut -d= -f2 || true)
         if [ -z "$IMG" ]; then
           echo "::error::system image revision could not be read from $IMG_PROPS — the AVD cache key would be unversioned"
           exit 1
@@ -320,7 +320,7 @@ runs:
             for kid in $(pgrep -P "$dvmpid" 2>/dev/null); do
               stat=$(ps -p "$kid" -o stat= 2>/dev/null)
               case "$stat" in Z*|"") continue ;; esac
-              if ps -p "$kid" -o args= 2>/dev/null | grep -q development-service; then
+              if ps -p "$kid" -o args= 2>/dev/null | grep development-service >/dev/null; then
                 cand="$cand $kid"
               else
                 live=1
@@ -432,7 +432,7 @@ runs:
         SDK="$(cygpath "$ANDROID_HOME")"
         # Windows ships the launcher as bin/sdkmanager.bat; match the bin/
         # path (a name glob also matches lib/sdkmanager-classpath.jar).
-        SDKMGR="$(find "$SDK/cmdline-tools" -path '*/bin/sdkmanager.bat' -type f | head -1)"
+        SDKMGR="$(find "$SDK/cmdline-tools" -path '*/bin/sdkmanager.bat' -type f | sed -n 1p)"
         [ -n "$SDKMGR" ] || { echo "::error::sdkmanager.bat not found under $SDK/cmdline-tools"; exit 1; }
         yes | "$SDKMGR" --licenses > /dev/null 2>&1 || true
         "$SDKMGR" --install \
@@ -455,7 +455,7 @@ runs:
         # with force-avd-creation: false — checks avd directory).
         AVD_DIR="$HOME/.android/avd/test.avd"
         if [ ! -d "$AVD_DIR" ]; then
-          AVDMGR="$(find "$SDK/cmdline-tools" -path '*/bin/avdmanager.bat' -type f | head -1)"
+          AVDMGR="$(find "$SDK/cmdline-tools" -path '*/bin/avdmanager.bat' -type f | sed -n 1p)"
           [ -n "$AVDMGR" ] || { echo "::error::avdmanager.bat not found under $SDK/cmdline-tools"; exit 1; }
           echo no | "$AVDMGR" create avd --force -n test \
             --package "system-images;android-${INPUTS_API_LEVEL};aosp_atd;x86_64"
@@ -499,7 +499,7 @@ runs:
         # Wait for each service to actually exist first.
         wait_for_service() {
           local svc="$1" tries=0
-          until $ADB shell service check "$svc" 2>/dev/null | grep -q "Service $svc:"; do
+          until $ADB shell service check "$svc" 2>/dev/null | grep "Service $svc:" >/dev/null; do
             tries=$((tries + 1))
             [ "$tries" -gt 60 ] && echo "::warning::service '$svc' never published" && return 0
             sleep 1

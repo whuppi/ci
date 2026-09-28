@@ -4,6 +4,21 @@ Releases are cut from the top heading here by `self-release.yml`; consumers pin
 an exact version and upgrade through grouped Dependabot PRs. Versioning rules
 live in the README. Newest first.
 
+## 2.7.9
+
+- `oci-cache`: the oras install step ended in `oras version` piped into a
+  reader that quits after the first line. oras writes its version lines one
+  by one, so when the reader quit first, oras died of SIGPIPE and the step
+  failed with exit code 141 under `pipefail`. It hit the Android compile row
+  of a consumer's weekly Full Test twice in a row. Every pipe in this repo
+  that fed an early-exit reader now feeds one that reads to the end:
+  `sed -n 1p` for the first line, a plain grep sent to `/dev/null` for a
+  match test (`android-emulator`, `fvm`, `oci-cache`, `debug-ssh`,
+  `upgrade-check`, `release.sh`, `secrets.sh`).
+- `tool/lint_pipes.sh`, run by `make check` and `self-check`, refuses a new
+  early-exit reader after a pipe in this repo. It is not stamped into
+  consumers.
+
 ## 2.7.8
 
 - `android-emulator`: from Dart 3.13.4 (Flutter 3.47.5) on macOS x64, the

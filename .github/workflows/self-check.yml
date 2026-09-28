@@ -67,6 +67,9 @@ jobs:
       - name: shell lint (portability)
         shell: bash
         run: bash tool/lint_shell.sh
+      - name: pipe readers (SIGPIPE under pipefail)
+        shell: bash
+        run: bash tool/lint_pipes.sh
 
   action-yaml-parse:
     name: Action YAML parse
