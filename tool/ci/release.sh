@@ -74,7 +74,7 @@ ensure_jq  # this script parses pub.dev JSON via jq
 REPO="${GITHUB_REPOSITORY:?release.sh requires GITHUB_REPOSITORY (owner/repo)}"
 REPO_URL="https://github.com/$REPO"
 if [ -f pubspec.yaml ]; then
-  PKG_NAME="$(sed -n 's/^name:[[:space:]]*//p' pubspec.yaml | head -1)"
+  PKG_NAME="$(sed -n 's/^name:[[:space:]]*//p' pubspec.yaml | sed -n 1p)"
   [ -n "$PKG_NAME" ] || { echo "::error::no 'name:' in pubspec.yaml — run from the package root" >&2; exit 1; }
 else
   PKG_NAME="$REPO"
@@ -609,7 +609,7 @@ cmd_gate() {
       local versions_before
       versions_before=$(git show "${BEFORE}:$target_file" 2>/dev/null \
         | sed -n 's/^## \([^ ]*\).*/\1/p' || true)
-      new_version=$(comm -23 <(sort <<< "$versions_after") <(sort <<< "$versions_before") | head -1)
+      new_version=$(comm -23 <(sort <<< "$versions_after") <(sort <<< "$versions_before") | sed -n 1p)
     fi
 
     if [[ -n "$new_version" ]]; then
@@ -654,7 +654,7 @@ cmd_discover() {
   fi
 
   local version
-  version=$(get_changelog_versions "$file" | head -1 || true)
+  version=$(get_changelog_versions "$file" | sed -n 1p || true)
   if [ -z "$version" ] || ! valid_semver "$version"; then
     gh_output "has_release" "false"
     echo "No valid version heading in $file"

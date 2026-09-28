@@ -124,7 +124,7 @@ runs:
         # The archive extracts an fvm/ subdir: the launcher plus its bundled
         # src/ runtime.
         FVM_BIN="$INSTALL_DIR/fvm"
-        ls -la "$FVM_BIN"/ | head -5
+        ls -la "$FVM_BIN"/ | sed -n '1,5p'
 
         # Copy the WHOLE tool into a fixed literal dir and put THAT on PATH —
         # never the runner-derived toolcache dir, which the env-file audit

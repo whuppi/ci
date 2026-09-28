@@ -27,6 +27,7 @@ hooks:
 # Shell portability + correctness (shellcheck + bash 3.2 + BSD scans).
 lint-shell:
 	bash tool/lint_shell.sh
+	bash tool/lint_pipes.sh
 
 # Workflow + composite-action YAML parse, then actionlint + zizmor if present.
 # Each external tool degrades to a note when missing — CI enforces the full set.

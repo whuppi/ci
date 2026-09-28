@@ -141,7 +141,7 @@ cmd_rm() {
     local ghn scope_args
     ghn="$key"
     if [ "$env" = "org" ]; then scope_args=(--org "$ORG"); else scope_args=(--env "$env" --repo "$REPO"); fi
-    if gh secret list "${scope_args[@]}" 2>/dev/null | grep -qE "^${ghn}[[:space:]]"; then
+    if gh secret list "${scope_args[@]}" 2>/dev/null | grep -E "^${ghn}[[:space:]]" >/dev/null; then
         if gh secret delete "$ghn" "${scope_args[@]}" 2>/dev/null; then
             echo "✓ GitHub:    $env → $ghn (deleted)"
         else

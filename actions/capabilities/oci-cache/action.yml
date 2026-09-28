@@ -125,7 +125,7 @@ runs:
           echo "/opt/oras" >> "$GITHUB_PATH"
           export PATH="/opt/oras:$PATH"
         fi
-        oras version | head -1
+        oras version | sed -n 1p
         touch /tmp/.oras-pinned
 
     - name: Login
@@ -198,7 +198,7 @@ runs:
         elif [ -n "$FALLBACK_REF" ] && oras pull "$FALLBACK_REF" -o "$work" >/dev/null 2>&1; then used="$FALLBACK_REF"
         fi
         if [ -n "$used" ]; then
-          archive=$(find "$work" -maxdepth 1 -type f \( -name 'cache.tzst' -o -name 'cache.tgz' \) | head -1)
+          archive=$(find "$work" -maxdepth 1 -type f \( -name 'cache.tzst' -o -name 'cache.tgz' \) | sed -n 1p)
           [ -n "$archive" ] || { echo "::warning::oci-cache: $used holds no archive; treating as miss"; used=""; hit=false; }
         fi
         if [ -n "$used" ]; then
@@ -216,7 +216,7 @@ runs:
           # restore into a miss every run. GNU-only flag; bsdtar (macOS)
           # leaves existing directories alone already.
           keep_dirs=""
-          if tar --version 2>/dev/null | grep -q "GNU tar"; then keep_dirs="--no-overwrite-dir"; fi
+          if tar --version 2>/dev/null | grep "GNU tar" >/dev/null; then keep_dirs="--no-overwrite-dir"; fi
           if [ "${archive##*.}" = tzst ]; then
             zstd -d -c "$archive" | tar $keep_dirs -xPf - 2>"$work/tar.err" && ok=true || ok=false
           else
