@@ -4,6 +4,12 @@ Releases are cut from the top heading here by `self-release.yml`; consumers pin
 an exact version and upgrade through grouped Dependabot PRs. Versioning rules
 live in the README. Newest first.
 
+## 2.7.13
+
+- `android-emulator`: on Windows, a boot that does not complete in 600 s
+  (seen on a resumed AVD snapshot, with no error) stops the emulator and
+  boots it once more, cold, before the job fails; nothing has run on it yet.
+
 ## 2.7.12
 
 - `android-emulator`: on Linux and macOS, reactivecircus sends
