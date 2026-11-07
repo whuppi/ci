@@ -4,6 +4,15 @@ Releases are cut from the top heading here by `self-release.yml`; consumers pin
 an exact version and upgrade through grouped Dependabot PRs. Versioning rules
 live in the README. Newest first.
 
+## 2.7.12
+
+- `android-emulator`: on Linux and macOS, reactivecircus sends
+  `input keyevent 82` as soon as `sys.boot_completed` reads 1, before the
+  input service is published, and the step failed with "No service published
+  for: input" (reactivecircus#432). A boot that fails before the command
+  starts now boots once more, for the snapshot step and the run step; a
+  command that ran and failed still fails the job.
+
 ## 2.7.11
 
 - `upgrade-check`: the flutter-sdk job bumps every `.fvmrc` in the repo and

@@ -218,12 +218,33 @@ runs:
         key: avd-${{ runner.os }}-${{ runner.arch }}-${{ inputs.api-level }}-emu${{ steps.emu-ver.outputs.version }}-img${{ steps.emu-ver.outputs.image }}
 
     # ── Snapshot generation (cache miss only) ──
+    # reactivecircus sends `input keyevent 82` the moment sys.boot_completed
+    # reads 1, before the input service is published, and fails the step
+    # with "No service published for: input" (reactivecircus#432; it has no
+    # wait or retry of its own). That failure comes before any command runs,
+    # so a second boot is safe: here and in "Boot + run" below, a step that
+    # failed before its command started is booted once more. The Windows
+    # path waits for each service itself.
     - name: Generate AVD snapshot (Linux/macOS)
+      id: snapshot
       if: >-
         runner.os != 'Windows' &&
         inputs.avd-cache == 'true' &&
         steps.avd-cache.outputs.cache-hit != 'true' &&
         steps.avd-oci.outputs.cache-hit != 'true'
+      continue-on-error: true
+      uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+      with:
+        api-level: ${{ inputs.api-level }}
+        arch: x86_64
+        target: aosp_atd
+        force-avd-creation: false
+        emulator-options: -no-window -noaudio -no-boot-anim
+        emulator-boot-timeout: 600
+        disable-animations: false
+        script: echo "AVD snapshot generated for caching."
+    - name: Generate AVD snapshot, second boot (Linux/macOS)
+      if: steps.snapshot.outcome == 'failure'
       uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
       with:
         api-level: ${{ inputs.api-level }}
@@ -243,11 +264,16 @@ runs:
       if: runner.os != 'Windows'
       shell: bash
       run: |
+        rm -f /tmp/emulator-script-started
         cat > /tmp/emulator-run.sh << 'EMUSCRIPT'
         #!/usr/bin/env bash
         # NOT -e: the result reconciler at the end must run even when the
         # command exits non-zero.
         set -uo pipefail
+
+        # The boot step's retry reads this: a failure before it exists is the
+        # emulator's, never the command's.
+        touch /tmp/emulator-script-started
 
         OUT=/tmp/emulator-cmd.log
         : > "$OUT"
@@ -401,7 +427,40 @@ runs:
     #   post-test state back. clean slate every run.
     # -no-snapshot: cold-boot, ignore snapshot entirely (cold-boot input).
     - name: Boot + run (Linux/macOS)
+      id: boot
       if: runner.os != 'Windows'
+      continue-on-error: true
+      uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+      with:
+        api-level: ${{ inputs.api-level }}
+        arch: x86_64
+        target: aosp_atd
+        force-avd-creation: false
+        emulator-options: >-
+          ${{ inputs.cold-boot == 'true' && '-no-snapshot' || '-no-snapshot-save' }}
+          -no-window -noaudio -no-boot-anim
+        emulator-boot-timeout: 600
+        disable-animations: true
+        script: /tmp/emulator-run.sh '${{ inputs.script }}'
+
+    # The marker says whether the command ran. If it did, its failure is the
+    # job's; if not, the emulator failed to come up and boots once more.
+    - name: Did the command start (Linux/macOS)
+      id: started
+      if: runner.os != 'Windows' && steps.boot.outcome == 'failure'
+      shell: bash
+      run: |
+        if [ -f /tmp/emulator-script-started ]; then started=true; else started=false; fi
+        echo "started=$started" >> "$GITHUB_OUTPUT"
+        echo "the first boot failed; the command had started: $started"
+    - name: Fail with the command (Linux/macOS)
+      if: steps.started.outputs.started == 'true'
+      shell: bash
+      run: |
+        echo "::error::the command run on the emulator failed; its output is above"
+        exit 1
+    - name: Boot + run, second boot (Linux/macOS)
+      if: steps.started.outputs.started == 'false'
       uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
       with:
         api-level: ${{ inputs.api-level }}
