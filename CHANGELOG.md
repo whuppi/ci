@@ -4,6 +4,19 @@ Releases are cut from the top heading here by `self-release.yml`; consumers pin
 an exact version and upgrade through grouped Dependabot PRs. Versioning rules
 live in the README. Newest first.
 
+## 2.7.10
+
+- Self-check's `oci-cache` round-trip runs on `macos-15`: GitHub retired the
+  `macos-14` image on November 2, 2026, so a job on it fails before it starts
+  with "The configuration 'macos-14-arm64-us-default' is not supported".
+  Consumers that still ask for `macos-14` must move too.
+- `free-disk-space` uses jlumbroso/free-disk-space v2.0.0, whose
+  `tool-cache` input is named `preinstalled-runtimes`; swap is still kept and
+  the hosted tool cache is still left in place.
+- Pinned versions bumped (fvm 4.3.1 → 4.3.2, pinact 5.0.0 → 5.0.2, chrome
+  154.0.8037.57 → 157.0.8103.38, oras 1.3.4 → 1.3.6); sha256s recomputed from
+  the upstream release assets.
+
 ## 2.7.9
 
 - `oci-cache`: the oras install step ended in `oras version` piped into a
