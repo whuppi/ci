@@ -1,7 +1,9 @@
 # Reusable consumer upgrade radar — things a consuming repo owns that its
 # updater doesn't cover here, each in its own reviewed PR:
-#   flutter-sdk  — the Flutter SDK pin (.fvmrc + example/.fvmrc) → latest stable.
-#   lockfiles    — pubspec.lock files refreshed to latest in-range.
+#   flutter-sdk  — the Flutter SDK pin (every .fvmrc in the repo) → latest stable.
+#   lockfiles    — every committed pubspec.lock outside vendor/ refreshed to
+#                  latest in-range (flutter pub for a Flutter package, dart pub
+#                  otherwise).
 #   action-refs  — ONE owner for EVERY `uses:` action ref (opt-in): whuppi/ci
 #                  refs across .github (workflows AND composites) → latest
 #                  release, kept uniform so the pin never splits; and every
@@ -53,7 +55,7 @@ defaults:
     shell: bash
 
 jobs:
-  # ── Flutter SDK (.fvmrc + example/.fvmrc) ────────────────────────
+  # ── Flutter SDK (every .fvmrc) ───────────────────────────────────
   flutter-sdk:
     name: Flutter SDK
     runs-on: ${{ inputs.runner }}
@@ -107,10 +109,10 @@ jobs:
             exit 0
           fi
           echo "flutter: $cur -> $latest"
-          for f in .fvmrc example/.fvmrc; do
+          while IFS= read -r f; do
             [ -f "$f" ] || continue
             sed -i.bak "s/\"flutter\": *\"[^\"]*\"/\"flutter\": \"$latest\"/" "$f" && rm -f "$f.bak"
-          done
+          done < <(git ls-files ':(glob)**/.fvmrc' | grep -v '^vendor/')
 
       - name: Commit + open or update the SDK PR
         env:
@@ -130,7 +132,7 @@ jobs:
           fi
 
           PR_BODY="$(cat <<'EOF'
-          Flutter SDK bump to the latest stable (`.fvmrc` + `example/.fvmrc`).
+          Flutter SDK bump to the latest stable (every `.fvmrc` in the repo).
 
           Add `ready-to-test` for the full cross-target run, then merge once green.
 
@@ -182,11 +184,19 @@ jobs:
 
       - name: Refresh lockfiles to latest in-range
         run: |
-          # Root is a pure-Dart package: --no-example so `dart pub` does not try
-          # to resolve the Flutter example (it has no sky_engine, dart can't).
-          # The example is a Flutter app, so refresh it with `flutter pub`.
-          fvm dart pub upgrade --no-example
-          ( cd example && fvm flutter pub upgrade )
+          # Every committed pubspec.lock outside vendor/. A Flutter package
+          # (its pubspec.yaml has an `sdk: flutter` dependency) is refreshed
+          # with `flutter pub`; a pure-Dart package with `dart pub`, and
+          # --no-example so it does not try to resolve a Flutter example (it
+          # has no sky_engine, dart can't).
+          while IFS= read -r f; do
+            dir="$(dirname "$f")"
+            if grep -Eq '^[[:space:]]+sdk:[[:space:]]*flutter' "$dir/pubspec.yaml"; then
+              ( cd "$dir" && fvm flutter pub upgrade ) || { echo "::error::pub upgrade failed in $dir"; exit 1; }
+            else
+              ( cd "$dir" && fvm dart pub upgrade --no-example ) || { echo "::error::pub upgrade failed in $dir"; exit 1; }
+            fi
+          done < <(git ls-files ':(glob)**/pubspec.lock' | grep -v '^vendor/')
 
       - name: Commit + open or update the lockfiles PR
         env:

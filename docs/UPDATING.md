@@ -11,9 +11,9 @@ consumer onboarding.
 | Thing | Bumped by | You do |
 |---|---|---|
 | Tool/binary pins (`tool/versions.env`) | `self-upgrade.yml` daily PR | Review the hashes, merge, cut a release |
-| Consumer **pub deps** (root + example) | consumer's **Dependabot** (pub ecosystem only) | Review + merge its grouped PRs |
+| Consumer **pub deps** (every package folder) | consumer's **Dependabot** (pub ecosystem only, one entry per folder) | Review + merge its grouped PRs |
 | **Every action `uses:` ref** — whuppi/ci + third-party, workflows AND composites | the `action-refs` job in the reusable `upgrade-check.yml` (opt-in) | Review + merge the one bump PR it opens |
-| Consumers' Flutter SDK + lockfiles | reusable `upgrade-check.yml` | Nothing here |
+| Consumers' Flutter SDK + lockfiles | reusable `upgrade-check.yml`: the flutter-sdk job bumps every `.fvmrc` in the repo (each app folder carries its own), the lockfiles job refreshes every committed `pubspec.lock` outside `vendor/` | Nothing here |
 
 **One owner for every action ref (`action-refs`).** Dependabot's github-actions
 updater never reads `uses:` refs inside composite `action.yml`
