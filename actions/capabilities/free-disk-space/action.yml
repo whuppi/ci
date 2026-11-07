@@ -17,10 +17,11 @@ runs:
       if: runner.os == 'Linux'
       uses: jlumbroso/free-disk-space@ceedf095f4ec1a097402bc6bd80831f2e1a6fde6 # v2.0.0
       with:
-        # Keep the hosted tool cache: capabilities may install tools there
-        # (a compiler wrapper, an SDK) before this step runs, and deleting it
-        # breaks every build invocation that follows.
-        tool-cache: false
+        # Keep the pre-installed runtimes (the hosted tool cache):
+        # capabilities may install tools there (a compiler wrapper, an SDK)
+        # before this step runs, and deleting it breaks every build
+        # invocation that follows. v2 renamed `tool-cache` to this.
+        preinstalled-runtimes: false
         android: true
         dotnet: true
         haskell: true
