@@ -536,20 +536,32 @@ runs:
           SNAP_FLAG=""
         fi
         echo "snapshot flag: ${SNAP_FLAG:-<save quick-boot snapshot on kill>}"
-        "$SDK/emulator/emulator" -port 5554 -avd test \
-          $SNAP_FLAG -no-window -noaudio -no-boot-anim &
 
-        # Poll for boot (matches action's adb wait loop).
-        TIMEOUT=600; ELAPSED=0
-        while [ $ELAPSED -lt $TIMEOUT ]; do
-          RESULT=$($ADB shell getprop sys.boot_completed 2>/dev/null || true)
-          if [ "$RESULT" = "1" ]; then
-            echo "Emulator booted in ${ELAPSED}s."
-            break
-          fi
-          sleep 2; ELAPSED=$((ELAPSED + 2))
-        done
-        [ "$RESULT" != "1" ] && echo "::error::Emulator boot timeout" && exit 1
+        # Launch and poll for boot (matches action's adb wait loop).
+        boot() {
+          "$SDK/emulator/emulator" -port 5554 -avd test \
+            $1 -no-window -noaudio -no-boot-anim &
+          local elapsed=0
+          while [ $elapsed -lt 600 ]; do
+            if [ "$($ADB shell getprop sys.boot_completed 2>/dev/null || true)" = "1" ]; then
+              echo "Emulator booted in ${elapsed}s."
+              return 0
+            fi
+            sleep 2; elapsed=$((elapsed + 2))
+          done
+          return 1
+        }
+        # A boot can hang with no error (a resumed snapshot most often), and
+        # nothing has run yet, so the emulator is stopped and booted once
+        # more, cold, before the job fails.
+        if ! boot "$SNAP_FLAG"; then
+          echo "::warning::the emulator did not boot in 600s; booting once more, cold"
+          $ADB emu kill >/dev/null 2>&1 || true
+          sleep 5
+          taskkill //F //IM qemu-system-x86_64.exe >/dev/null 2>&1 || true
+          taskkill //F //IM emulator.exe >/dev/null 2>&1 || true
+          boot -no-snapshot || { echo "::error::Emulator boot timeout, twice"; exit 1; }
+        fi
 
         # sys.boot_completed flips when the kernel is up, but system
         # services (input, settings) publish to ServiceManager a moment
