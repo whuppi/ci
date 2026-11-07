@@ -4,6 +4,14 @@ Releases are cut from the top heading here by `self-release.yml`; consumers pin
 an exact version and upgrade through grouped Dependabot PRs. Versioning rules
 live in the README. Newest first.
 
+## 2.7.11
+
+- `upgrade-check`: the flutter-sdk job bumps every `.fvmrc` in the repo and
+  the lockfiles job refreshes every committed `pubspec.lock` outside
+  `vendor/`, where both handled only the root and `example/`; a consumer's
+  other app and package folders (a trimmed example shell, a benchmark package)
+  no longer keep a stale SDK pin or lock.
+
 ## 2.7.10
 
 - Self-check's `oci-cache` round-trip runs on `macos-15`: GitHub retired the
