@@ -88,6 +88,10 @@ runs:
     # runner image, but an unpinned tool is a tool that changes under CI).
     - name: Install oras
       shell: bash
+      env:
+        # Lets fetch_verified.sh reach the release asset through the API when
+        # the release-download URL fails (an authenticated rate limit).
+        GH_TOKEN: ${{ github.token }}
       run: |
         set -euo pipefail
         if command -v oras >/dev/null 2>&1 && [ -f /tmp/.oras-pinned ]; then exit 0; fi

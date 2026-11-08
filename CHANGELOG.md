@@ -4,6 +4,15 @@ Releases are cut from the top heading here by `self-release.yml`; consumers pin
 an exact version and upgrade through grouped Dependabot PRs. Versioning rules
 live in the README. Newest first.
 
+## 2.7.14
+
+- `tool/fetch_verified.sh`: a GitHub release asset whose download URL fails
+  is fetched through the GitHub REST API before the download gives up; the
+  pinned sha256 is checked the same way. The release-download URL of oras
+  1.3.6 answered 504 for hours while the API served the asset, which failed
+  every `oci-cache` row on every consumer. `oci-cache` passes its token so
+  the API call is not limited to the anonymous rate.
+
 ## 2.7.13
 
 - `android-emulator`: on Windows, a boot that does not complete in 600 s
