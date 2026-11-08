@@ -33,8 +33,32 @@ fi
 
 # Bound on stall (under 2KB/s for 30s), not total time, so a large asset on a
 # slow link still finishes; --max-time is the backstop for a hung pipe.
-curl -sSL --fail --retry 3 --retry-delay 2 --max-redirs 5 --connect-timeout 10 \
-     --speed-limit 2048 --speed-time 30 --max-time 1800 "$URL" -o "$DEST" \
+fetch() {
+  curl -sSL --fail --retry 3 --retry-delay 2 --max-redirs 5 --connect-timeout 10 \
+       --speed-limit 2048 --speed-time 30 --max-time 1800 "$@" -o "$DEST"
+}
+
+# A GitHub release asset has a second door: the REST API serves the same
+# bytes from another path. The release-download URL has answered 504 for
+# hours while the API served the asset, so a failed download of one tries
+# the API before giving up. The hash check below is the same either way.
+from_api() {
+  local rest owner repo tag name api id auth=()
+  rest="${URL#https://github.com/}"
+  [ "$rest" != "$URL" ] || return 1
+  IFS=/ read -r owner repo r1 r2 tag name <<<"$rest"
+  [ "$r1/$r2" = releases/download ] && [ -n "$name" ] || return 1
+  [ -n "${GH_TOKEN:-${GITHUB_TOKEN:-}}" ] && auth=(-H "Authorization: Bearer ${GH_TOKEN:-${GITHUB_TOKEN:-}}")
+  api="https://api.github.com/repos/$owner/$repo/releases/tags/$tag"
+  id=$(curl -sS --fail --retry 3 --connect-timeout 10 --max-time 60 ${auth[@]+"${auth[@]}"} "$api" \
+       | jq -r --arg n "$name" '.assets[] | select(.name == $n) | .id') || return 1
+  [ -n "$id" ] || return 1
+  echo "release download failed; fetching $name through the GitHub API" >&2
+  fetch ${auth[@]+"${auth[@]}"} -H "Accept: application/octet-stream" \
+    "https://api.github.com/repos/$owner/$repo/releases/assets/$id"
+}
+
+fetch "$URL" || from_api \
   || { echo "download failed or stalled: $URL" >&2; exit 1; }
 
 # Feed the file on stdin, never as a path argument: GNU coreutils (and Perl
