@@ -88,6 +88,7 @@ runs:
       env:
         INPUT_USER: ${{ inputs.github-user }}
         ACTOR: ${{ github.actor }}
+        GH_TOKEN: ${{ github.token }}
       run: |
         set -euo pipefail
         SSH_USER="${INPUT_USER:-$ACTOR}"
@@ -135,6 +136,7 @@ runs:
       env:
         INPUT_USER: ${{ inputs.github-user }}
         ACTOR: ${{ github.actor }}
+        GH_TOKEN: ${{ github.token }}
       run: |
         set -euo pipefail
         SSH_USER="${INPUT_USER:-$ACTOR}"
@@ -178,6 +180,7 @@ runs:
       env:
         INPUT_USER: ${{ inputs.github-user }}
         ACTOR: ${{ github.actor }}
+        GH_TOKEN: ${{ github.token }}
       run: |
         set -euo pipefail
         SSH_USER="${INPUT_USER:-$ACTOR}"
