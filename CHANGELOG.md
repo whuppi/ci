@@ -4,6 +4,12 @@ Releases are cut from the top heading here by `self-release.yml`; consumers pin
 an exact version and upgrade through grouped Dependabot PRs. Versioning rules
 live in the README. Newest first.
 
+## 2.7.15
+
+- `fvm` and `debug-ssh` pass the job's token to `tool/fetch_verified.sh`, so
+  its GitHub API fallback (2.7.14) is not refused at the anonymous rate limit,
+  which shared runner addresses spend: the fvm download failed with 403.
+
 ## 2.7.14
 
 - `tool/fetch_verified.sh`: a GitHub release asset whose download URL fails

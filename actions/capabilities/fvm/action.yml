@@ -68,6 +68,9 @@ runs:
 
     - name: Install FVM + project SDK
       shell: bash
+      env:
+        # fetch_verified.sh's API fallback for a failed release download.
+        GH_TOKEN: ${{ github.token }}
       run: |
         set -euo pipefail
 
