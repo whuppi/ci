@@ -50,7 +50,7 @@ from_api() {
   [ "$r1/$r2" = releases/download ] && [ -n "$name" ] || return 1
   [ -n "${GH_TOKEN:-${GITHUB_TOKEN:-}}" ] && auth=(-H "Authorization: Bearer ${GH_TOKEN:-${GITHUB_TOKEN:-}}")
   api="https://api.github.com/repos/$owner/$repo/releases/tags/$tag"
-  id=$(curl -sS --fail --retry 3 --connect-timeout 10 --max-time 60 ${auth[@]+"${auth[@]}"} "$api" \
+  id=$(curl -sSL --fail --retry 3 --connect-timeout 10 --max-time 60 ${auth[@]+"${auth[@]}"} "$api" \
        | jq -r --arg n "$name" '.assets[] | select(.name == $n) | .id') || return 1
   [ -n "$id" ] || return 1
   echo "release download failed; fetching $name through the GitHub API" >&2

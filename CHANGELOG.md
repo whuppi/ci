@@ -4,6 +4,12 @@ Releases are cut from the top heading here by `self-release.yml`; consumers pin
 an exact version and upgrade through grouped Dependabot PRs. Versioning rules
 live in the README. Newest first.
 
+## 2.7.16
+
+- `tool/fetch_verified.sh`: the API fallback follows a redirect, so a release
+  of a repository that moved (leoafarias/fvm is now btwld/fvm) resolves
+  instead of failing on the 301 answer.
+
 ## 2.7.15
 
 - `fvm` and `debug-ssh` pass the job's token to `tool/fetch_verified.sh`, so
