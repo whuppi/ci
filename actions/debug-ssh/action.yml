@@ -36,16 +36,22 @@
 #   IMPORTANT: increase the job's timeout-minutes to 300 (5 hours)
 #   in the workflow, or the job will be killed at the default timeout.
 #
-# HOW TO CONNECT:
-#   Option A — artifact (works even if logs aren't flushed yet):
-#     gh run download <RUN_ID> --name ssh-info-<OS> --dir /tmp/ssh-info
-#     $(cat /tmp/ssh-info/connect.txt)
+# HOW TO CONNECT — one command, from any clone of whuppi/ci:
+#     tool/debug-ssh/connect.sh <owner/repo> <run-id> [command…]
+#   It waits for the ssh-info-<OS> artifact (uploaded the moment the tunnel
+#   is up, readable while the job still runs), then logs in. The run's
+#   annotations and Summary only appear when the job ENDS, so never wait
+#   on them for a held job.
 #
-#   Option B — run Summary tab in the GitHub UI:
-#     Look for "SSH Connection" section.
+# THE SESSION'S SHELL is the job's: PATH (with every GITHUB_PATH entry the
+#   earlier steps added) and the toolchain variables (FVM_*, PUB_CACHE,
+#   CARGO_HOME, RUSTUP_HOME, ANDROID_*, JAVA_HOME, DEVELOPER_DIR) are written
+#   to ~/.debug-ssh-env and sourced by every login and non-login shell, and
+#   it starts in $GITHUB_WORKSPACE. No token is copied.
 #
-#   Option C — annotation in the checks tab:
-#     The ::notice:: annotation shows the ssh command.
+# HOLD: hold-minutes > 0 keeps the runner after the tunnel opens, so a job
+#   can provision, open SSH and wait (touch /tmp/stop to release it). The
+#   job's timeout-minutes must exceed the hold.
 #
 # SECURITY:
 #   - Auth: key-only. Keys pulled from the triggering user's GitHub
@@ -72,6 +78,18 @@ description: >
   Non-blocking SSH into the runner. See file header for usage.
 
 inputs:
+  hold-minutes:
+    description: >
+      Minutes to keep the runner after the tunnel opens (0 = return at
+      once). Ends early when /tmp/stop exists.
+    required: false
+    default: '0'
+  optional:
+    description: >
+      'true' = a tunnel that fails to open only warns. Default 'false':
+      someone asked for SSH, so a failure fails the step.
+    required: false
+    default: 'false'
   github-user:
     description: >
       GitHub username whose SSH keys are authorized.
@@ -89,6 +107,7 @@ runs:
         INPUT_USER: ${{ inputs.github-user }}
         ACTOR: ${{ github.actor }}
         GH_TOKEN: ${{ github.token }}
+        OPTIONAL: ${{ inputs.optional }}
       run: |
         set -euo pipefail
         SSH_USER="${INPUT_USER:-$ACTOR}"
@@ -112,12 +131,13 @@ runs:
         tar xz -C /tmp -f /tmp/bore.tar.gz
         chmod +x /tmp/bore
         nohup /tmp/bore local 2222 --to bore.pub > /tmp/bore.log 2>&1 &
-        sleep 5
+        for _ in $(seq 1 30); do grep -q 'bore\.pub:[0-9]' /tmp/bore.log 2>/dev/null && break; sleep 1; done
 
         BORE_PORT=$(grep -o 'bore\.pub:[0-9]*' /tmp/bore.log | cut -d: -f2 | sed -n 1p || true)
         if [ -z "$BORE_PORT" ]; then
-          echo "::warning::bore tunnel failed — continuing without SSH"
-          cat /tmp/bore.log; exit 0
+          cat /tmp/bore.log
+          if [ "$OPTIONAL" = true ]; then echo "::warning::bore tunnel failed — continuing without SSH"; exit 0; fi
+          echo "::error::bore tunnel failed; set optional: true to continue without SSH"; exit 1
         fi
 
         SSH_CMD="ssh -p $BORE_PORT -o StrictHostKeyChecking=no runner@bore.pub"
@@ -137,6 +157,7 @@ runs:
         INPUT_USER: ${{ inputs.github-user }}
         ACTOR: ${{ github.actor }}
         GH_TOKEN: ${{ github.token }}
+        OPTIONAL: ${{ inputs.optional }}
       run: |
         set -euo pipefail
         SSH_USER="${INPUT_USER:-$ACTOR}"
@@ -156,12 +177,13 @@ runs:
         tar xz -C /tmp -f /tmp/bore.tar.gz
         chmod +x /tmp/bore
         nohup /tmp/bore local 2222 --to bore.pub > /tmp/bore.log 2>&1 &
-        sleep 5
+        for _ in $(seq 1 30); do grep -q 'bore\.pub:[0-9]' /tmp/bore.log 2>/dev/null && break; sleep 1; done
 
         BORE_PORT=$(grep -o 'bore\.pub:[0-9]*' /tmp/bore.log | cut -d: -f2 | sed -n 1p || true)
         if [ -z "$BORE_PORT" ]; then
-          echo "::warning::bore tunnel failed — continuing without SSH"
-          cat /tmp/bore.log; exit 0
+          cat /tmp/bore.log
+          if [ "$OPTIONAL" = true ]; then echo "::warning::bore tunnel failed — continuing without SSH"; exit 0; fi
+          echo "::error::bore tunnel failed; set optional: true to continue without SSH"; exit 1
         fi
 
         SSH_CMD="ssh -p $BORE_PORT -o StrictHostKeyChecking=no runner@bore.pub"
@@ -181,6 +203,7 @@ runs:
         INPUT_USER: ${{ inputs.github-user }}
         ACTOR: ${{ github.actor }}
         GH_TOKEN: ${{ github.token }}
+        OPTIONAL: ${{ inputs.optional }}
       run: |
         set -euo pipefail
         SSH_USER="${INPUT_USER:-$ACTOR}"
@@ -207,12 +230,13 @@ runs:
         unzip -qo /tmp/bore.zip -d /tmp && rm /tmp/bore.zip
 
         /tmp/bore.exe local 22 --to bore.pub > /tmp/bore.log 2>&1 &
-        sleep 5
+        for _ in $(seq 1 30); do grep -q 'bore\.pub:[0-9]' /tmp/bore.log 2>/dev/null && break; sleep 1; done
 
         BORE_PORT=$(grep -o 'bore\.pub:[0-9]*' /tmp/bore.log | cut -d: -f2 | sed -n 1p || true)
         if [ -z "$BORE_PORT" ]; then
-          echo "::warning::bore tunnel failed — continuing without SSH"
-          cat /tmp/bore.log; exit 0
+          cat /tmp/bore.log
+          if [ "$OPTIONAL" = true ]; then echo "::warning::bore tunnel failed — continuing without SSH"; exit 0; fi
+          echo "::error::bore tunnel failed; set optional: true to continue without SSH"; exit 1
         fi
 
         SSH_CMD="ssh -p $BORE_PORT -o StrictHostKeyChecking=no runneradmin@bore.pub"
@@ -225,8 +249,38 @@ runs:
         echo "$SSH_CMD" > /tmp/ssh-info/connect.txt
         echo "$BORE_PORT" > /tmp/ssh-info/port.txt
 
+    # The session gets the job's toolchain, never its secrets: only PATH and
+    # the named toolchain variables are written, quoted by printf %q.
+    - name: Give SSH sessions the job's environment
+      if: runner.os != 'Windows'
+      shell: bash
+      run: |
+        set -euo pipefail
+        f="$HOME/.debug-ssh-env"
+        {
+          printf 'export PATH=%q\n' "$PATH"
+          for v in $(compgen -e | grep -E '^(FVM_|PUB_CACHE$|CARGO_HOME$|RUSTUP_HOME$|ANDROID_|JAVA_HOME$|DEVELOPER_DIR$|FLUTTER_)'); do
+            printf 'export %s=%q\n' "$v" "${!v}"
+          done
+          printf 'cd %q 2>/dev/null || true\n' "$GITHUB_WORKSPACE"
+        } > "$f"
+        for rc in .bashrc .bash_profile .zshenv .profile; do
+          grep -qs debug-ssh-env "$HOME/$rc" || echo '[ -f ~/.debug-ssh-env ] && . ~/.debug-ssh-env' >> "$HOME/$rc"
+        done
+        echo "session env: $(wc -l < "$f") lines in $f"
+
     - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: ssh-info-${{ runner.os }}
         path: /tmp/ssh-info/
         if-no-files-found: ignore
+
+    - name: Hold the runner for SSH (touch /tmp/stop to end)
+      if: inputs.hold-minutes != '0'
+      shell: bash
+      env:
+        HOLD: ${{ inputs.hold-minutes }}
+      run: |
+        echo "holding up to $HOLD min; connect with tool/debug-ssh/connect.sh ${GITHUB_REPOSITORY} ${GITHUB_RUN_ID}"
+        end=$(( $(date +%s) + HOLD * 60 ))
+        while [ ! -f /tmp/stop ] && [ "$(date +%s)" -lt "$end" ]; do sleep 10; done
