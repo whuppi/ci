@@ -4,6 +4,17 @@ Releases are cut from the top heading here by `self-release.yml`; consumers pin
 an exact version and upgrade through grouped Dependabot PRs. Versioning rules
 live in the README. Newest first.
 
+## 2.7.17
+
+- `debug-ssh`: `tool/debug-ssh/connect.sh <owner/repo> <run-id>` waits for
+  the tunnel's artifact and logs in; the address no longer has to be found
+  in annotations, which appear only when the job ends.
+- `debug-ssh`: an SSH session gets the job's PATH and toolchain variables
+  and starts in the workspace, so `fvm`, `cargo` and the rest are found.
+- `debug-ssh`: a tunnel that fails to open fails the step unless
+  `optional: true`; `hold-minutes` keeps the runner after the tunnel opens,
+  so a job can set up, open SSH and wait for `/tmp/stop`.
+
 ## 2.7.16
 
 - `tool/fetch_verified.sh`: the API fallback follows a redirect, so a release
