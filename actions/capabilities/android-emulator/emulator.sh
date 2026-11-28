@@ -20,6 +20,11 @@
 set -uo pipefail
 
 SDK="${ANDROID_HOME:?ANDROID_HOME is not set}"
+# avdmanager on Ubuntu 24.04 writes under $XDG_CONFIG_HOME/.android/avd while
+# the emulator reads $HOME/.android/avd ("Unknown AVD name"). One home for
+# both, the one the cache archives.
+export ANDROID_AVD_HOME="$HOME/.android/avd"
+mkdir -p "$ANDROID_AVD_HOME"
 ADB="$SDK/platform-tools/adb"
 SERIAL=emulator-5554
 API="${API:?API is not set}"
@@ -31,7 +36,7 @@ adb_() { "$ADB" -s "$SERIAL" "$@"; }
 log() { echo "emulator.sh: $*"; }
 
 ensure_avd() {
-  [ -d "$HOME/.android/avd/test.avd" ] && return 0
+  [ -f "$ANDROID_AVD_HOME/test.ini" ] && [ -d "$ANDROID_AVD_HOME/test.avd" ] && return 0
   local avdmgr pkg="system-images;android-${API};aosp_atd;x86_64"
   avdmgr="$(find "$SDK/cmdline-tools" -path '*/bin/avdmanager' -type f | sed -n 1p)"
   [ -n "$avdmgr" ] || { echo "::error::avdmanager not found under $SDK/cmdline-tools"; return 1; }
@@ -60,12 +65,20 @@ stop() {
   "$ADB" start-server >/dev/null 2>&1 || true
 }
 
+# The emulator process is still running; it exits at once on a bad AVD.
+alive() {
+  local pid
+  pid=$(cat /tmp/emulator.pid 2>/dev/null || true)
+  [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null
+}
+
 service_up() { adb_ shell service check "$1" 2>/dev/null | grep "Service $1: found" >/dev/null; }
 
 # Booted and settled within the time limits, or returns 1 with the reason.
 settle() {
   local start=$SECONDS svc
   until [ "$(adb_ shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = 1 ]; do
+    alive || { log "the emulator exited after $((SECONDS - start))s"; return 1; }
     [ $((SECONDS - start)) -lt "$BOOT_SECONDS" ] || { log "no boot_completed in ${BOOT_SECONDS}s"; return 1; }
     sleep 2
   done
@@ -101,14 +114,14 @@ case "$cmd" in
       echo "::error::the emulator never settled; no snapshot is saved"
       tail -40 /tmp/emulator-stdout.log
       stop
-      rm -rf "$HOME/.android/avd/test.avd/snapshots"
+      rm -rf "$ANDROID_AVD_HOME/test.avd/snapshots"
       exit 1
     fi
     # The framework keeps starting background work after the services are up;
     # a short quiet period keeps that out of the saved image.
     sleep 5
     stop
-    [ -d "$HOME/.android/avd/test.avd/snapshots/default_boot" ] \
+    [ -d "$ANDROID_AVD_HOME/test.avd/snapshots/default_boot" ] \
       || { echo "::error::the emulator exited without saving default_boot"; tail -40 /tmp/emulator-stdout.log; exit 1; }
     log "snapshot default_boot saved"
     ;;

@@ -225,6 +225,7 @@ runs:
     # later run resumes. The Windows path saves its snapshot at the end of
     # its run, long settled.
     - name: Generate AVD snapshot (Linux/macOS)
+      id: snapshot
       if: >-
         runner.os != 'Windows' &&
         inputs.avd-cache == 'true' &&
@@ -446,6 +447,7 @@ runs:
 
     # Step 2: Create AVD + boot + disable animations + run + kill
     - name: Boot + run (Windows)
+      id: windows-run
       if: runner.os == 'Windows'
       shell: bash
       run: |
@@ -546,14 +548,17 @@ runs:
         "$SDK/platform-tools/adb" -s emulator-5554 emu kill || true
 
     # ── AVD snapshot save (cold boot only) ──
-    # Runs after the emulator is down. Skipped on a hit — the key already
-    # exists and GitHub never overwrites one — and when the caller said
-    # this ref must not write.
+    # Runs after the emulator is down, and only when the step that made the
+    # snapshot succeeded: a failed job leaves an empty or half-started AVD,
+    # and a key is never overwritten, so saving it would make every later
+    # run resume it. Skipped on a hit and when the caller said this ref
+    # must not write.
     - name: Save AVD cache (ghcr)
       if: >-
         always() &&
         inputs.avd-cache == 'true' &&
-        inputs.avd-cache-backend == 'ghcr'
+        inputs.avd-cache-backend == 'ghcr' &&
+        (steps.snapshot.outcome == 'success' || steps.windows-run.outcome == 'success')
       uses: whuppi/ci/actions/capabilities/oci-cache@main
       with:
         phase: save
@@ -571,7 +576,8 @@ runs:
         inputs.avd-cache == 'true' &&
         inputs.avd-cache-backend == 'gha' &&
         inputs.avd-cache-save == 'true' &&
-        steps.avd-cache.outputs.cache-hit != 'true'
+        steps.avd-cache.outputs.cache-hit != 'true' &&
+        steps.snapshot.outcome == 'success'
       uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       continue-on-error: true
       with:
