@@ -196,26 +196,26 @@ runs:
     # carries the image revision and the archive pins the image. The gha
     # backend on Windows was never proven and stays off.
     - name: Restore AVD cache (ghcr)
-      if: inputs.avd-cache == 'true' && inputs.avd-cache-backend == 'ghcr'
+      if: runner.os != 'Linux' && inputs.avd-cache == 'true' && inputs.avd-cache-backend == 'ghcr'
       id: avd-oci
       uses: whuppi/ci/actions/capabilities/oci-cache@main
       with:
         phase: restore
         name: avd
-        key: ${{ runner.os }}-${{ runner.arch }}-${{ inputs.api-level }}-emu${{ steps.emu-ver.outputs.version }}-img${{ steps.emu-ver.outputs.image }}-settled
+        key: ${{ runner.os }}-${{ runner.arch }}-${{ inputs.api-level }}-emu${{ steps.emu-ver.outputs.version }}-img${{ steps.emu-ver.outputs.image }}-settled-swiftshader
         path: |
           ~/.android/avd/*
           ~/.android/adb*
 
     - name: Restore AVD cache
-      if: inputs.avd-cache == 'true' && runner.os != 'Windows' && inputs.avd-cache-backend == 'gha'
+      if: runner.os != 'Linux' && inputs.avd-cache == 'true' && runner.os != 'Windows' && inputs.avd-cache-backend == 'gha'
       uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       id: avd-cache
       with:
         path: |
           ~/.android/avd/*
           ~/.android/adb*
-        key: avd-${{ runner.os }}-${{ runner.arch }}-${{ inputs.api-level }}-emu${{ steps.emu-ver.outputs.version }}-img${{ steps.emu-ver.outputs.image }}-settled
+        key: avd-${{ runner.os }}-${{ runner.arch }}-${{ inputs.api-level }}-emu${{ steps.emu-ver.outputs.version }}-img${{ steps.emu-ver.outputs.image }}-settled-swiftshader
 
     # ── Snapshot generation (cache miss only) ──
     # emulator.sh boots cold, waits until the framework has settled (its
@@ -224,9 +224,10 @@ runs:
     # saved at sys.boot_completed holds a half-started system that every
     # later run resumes. The Windows path saves its snapshot at the end of
     # its run, long settled.
-    - name: Generate AVD snapshot (Linux/macOS)
+    - name: Generate AVD snapshot (macOS)
       id: snapshot
       if: >-
+        runner.os != 'Linux' &&
         runner.os != 'Windows' &&
         inputs.avd-cache == 'true' &&
         steps.avd-cache.outputs.cache-hit != 'true' &&
@@ -412,7 +413,9 @@ runs:
       shell: bash
       env:
         API: ${{ inputs.api-level }}
-        SNAP_FLAG: ${{ inputs.cold-boot == 'true' && '-no-snapshot' || '-no-snapshot-save' }}
+        # Linux boots cold every run: 22 s measured, and a snapshot resumed on
+        # another runner hung with its package manager silent.
+        SNAP_FLAG: ${{ (inputs.cold-boot == 'true' || runner.os == 'Linux') && '-no-snapshot' || '-no-snapshot-save' }}
         INPUTS_SCRIPT: ${{ inputs.script }}
       run: bash "$GITHUB_ACTION_PATH/emulator.sh" run "$INPUTS_SCRIPT"
 
@@ -555,6 +558,7 @@ runs:
     # must not write.
     - name: Save AVD cache (ghcr)
       if: >-
+        runner.os != 'Linux' &&
         always() &&
         inputs.avd-cache == 'true' &&
         inputs.avd-cache-backend == 'ghcr' &&
@@ -564,13 +568,14 @@ runs:
         phase: save
         save: ${{ inputs.avd-cache-save }}
         name: avd
-        key: ${{ runner.os }}-${{ runner.arch }}-${{ inputs.api-level }}-emu${{ steps.emu-ver.outputs.version }}-img${{ steps.emu-ver.outputs.image }}-settled
+        key: ${{ runner.os }}-${{ runner.arch }}-${{ inputs.api-level }}-emu${{ steps.emu-ver.outputs.version }}-img${{ steps.emu-ver.outputs.image }}-settled-swiftshader
         path: |
           ~/.android/avd/*
           ~/.android/adb*
 
     - name: Save AVD cache
       if: >-
+        runner.os != 'Linux' &&
         always() &&
         runner.os != 'Windows' &&
         inputs.avd-cache == 'true' &&
@@ -584,7 +589,7 @@ runs:
         path: |
           ~/.android/avd/*
           ~/.android/adb*
-        key: avd-${{ runner.os }}-${{ runner.arch }}-${{ inputs.api-level }}-emu${{ steps.emu-ver.outputs.version }}-img${{ steps.emu-ver.outputs.image }}-settled
+        key: avd-${{ runner.os }}-${{ runner.arch }}-${{ inputs.api-level }}-emu${{ steps.emu-ver.outputs.version }}-img${{ steps.emu-ver.outputs.image }}-settled-swiftshader
 
     # ── SDK components save (ghcr) ──
     # After the emulator is down: everything the run installed is on disk.

@@ -47,7 +47,12 @@ ensure_avd() {
 # Starts the emulator with the given flags; returns at once.
 launch() {
   log "launching with flags: ${*:-<none: save a quick-boot snapshot on kill>}"
-  "$SDK/emulator/emulator" -port 5554 -avd test "$@" -no-window -noaudio -no-boot-anim \
+  # -gpu swiftshader_indirect: left to choose, the emulator renders through
+  # the host's Vulkan driver, and the Ubuntu runner's lavapipe (llvmpipe
+  # JIT) kills the emulator with an illegal instruction when the app's
+  # surfaces are torn down. SwiftShader is the software path made for this.
+  "$SDK/emulator/emulator" -port 5554 -avd test "$@" -gpu swiftshader_indirect \
+    -no-window -noaudio -no-boot-anim \
     >/tmp/emulator-stdout.log 2>&1 &
   echo $! >/tmp/emulator.pid
 }
