@@ -4,6 +4,21 @@ Releases are cut from the top heading here by `self-release.yml`; consumers pin
 an exact version and upgrade through grouped Dependabot PRs. Versioning rules
 live in the README. Newest first.
 
+## 2.7.18
+
+- `android-emulator`: on Linux and macOS the emulator boots through the
+  action's own script instead of reactivecircus/android-emulator-runner; it
+  sends input and saves a snapshot only after the framework's services are
+  published and the package manager answers, where it acted at
+  `sys.boot_completed` and failed with "No service published for: input".
+- `android-emulator`: the emulator renders with `-gpu swiftshader_indirect`;
+  on the Ubuntu runner it rendered through lavapipe and died with an illegal
+  instruction after the tests, which showed as "adb: device offline".
+- `android-emulator`: Linux boots cold every run (about 22 s) and caches no
+  snapshot; a boot that does not settle is retried once, cold; a snapshot is
+  saved only when the step that made it succeeded, under a key that names
+  the renderer, so no earlier snapshot is resumed.
+
 ## 2.7.17
 
 - `debug-ssh`: `tool/debug-ssh/connect.sh <owner/repo> <run-id>` waits for
