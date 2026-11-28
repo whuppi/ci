@@ -202,7 +202,7 @@ runs:
       with:
         phase: restore
         name: avd
-        key: ${{ runner.os }}-${{ runner.arch }}-${{ inputs.api-level }}-emu${{ steps.emu-ver.outputs.version }}-img${{ steps.emu-ver.outputs.image }}
+        key: ${{ runner.os }}-${{ runner.arch }}-${{ inputs.api-level }}-emu${{ steps.emu-ver.outputs.version }}-img${{ steps.emu-ver.outputs.image }}-settled
         path: |
           ~/.android/avd/*
           ~/.android/adb*
@@ -215,46 +215,25 @@ runs:
         path: |
           ~/.android/avd/*
           ~/.android/adb*
-        key: avd-${{ runner.os }}-${{ runner.arch }}-${{ inputs.api-level }}-emu${{ steps.emu-ver.outputs.version }}-img${{ steps.emu-ver.outputs.image }}
+        key: avd-${{ runner.os }}-${{ runner.arch }}-${{ inputs.api-level }}-emu${{ steps.emu-ver.outputs.version }}-img${{ steps.emu-ver.outputs.image }}-settled
 
     # ── Snapshot generation (cache miss only) ──
-    # reactivecircus sends `input keyevent 82` the moment sys.boot_completed
-    # reads 1, before the input service is published, and fails the step
-    # with "No service published for: input" (reactivecircus#432; it has no
-    # wait or retry of its own). That failure comes before any command runs,
-    # so a second boot is safe: here and in "Boot + run" below, a step that
-    # failed before its command started is booted once more. The Windows
-    # path waits for each service itself.
+    # emulator.sh boots cold, waits until the framework has settled (its
+    # services published, the package manager answering), and only then
+    # kills the emulator, which saves the quick-boot snapshot. A snapshot
+    # saved at sys.boot_completed holds a half-started system that every
+    # later run resumes. The Windows path saves its snapshot at the end of
+    # its run, long settled.
     - name: Generate AVD snapshot (Linux/macOS)
-      id: snapshot
       if: >-
         runner.os != 'Windows' &&
         inputs.avd-cache == 'true' &&
         steps.avd-cache.outputs.cache-hit != 'true' &&
         steps.avd-oci.outputs.cache-hit != 'true'
-      continue-on-error: true
-      uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
-      with:
-        api-level: ${{ inputs.api-level }}
-        arch: x86_64
-        target: aosp_atd
-        force-avd-creation: false
-        emulator-options: -no-window -noaudio -no-boot-anim
-        emulator-boot-timeout: 600
-        disable-animations: false
-        script: echo "AVD snapshot generated for caching."
-    - name: Generate AVD snapshot, second boot (Linux/macOS)
-      if: steps.snapshot.outcome == 'failure'
-      uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
-      with:
-        api-level: ${{ inputs.api-level }}
-        arch: x86_64
-        target: aosp_atd
-        force-avd-creation: false
-        emulator-options: -no-window -noaudio -no-boot-anim
-        emulator-boot-timeout: 600
-        disable-animations: false
-        script: echo "AVD snapshot generated for caching."
+      shell: bash
+      env:
+        API: ${{ inputs.api-level }}
+      run: bash "$GITHUB_ACTION_PATH/emulator.sh" snapshot
 
     # ── Teardown watchdog wrapper ──
     # Written to /tmp and passed as the reactivecircus script.
@@ -423,56 +402,18 @@ runs:
         INPUTS_REPORT_JSON: ${{ inputs.report-json }}
 
     # ── Boot + run ──
-    # -no-snapshot-save: warm-boot from cached snapshot, don't save
-    #   post-test state back. clean slate every run.
-    # -no-snapshot: cold-boot, ignore snapshot entirely (cold-boot input).
+    # -no-snapshot-save resumes the cached snapshot and never writes the
+    # post-test state back; -no-snapshot (cold-boot: true) ignores it.
+    # emulator.sh boots cold once more when a boot does not settle, before
+    # anything has run; a failure after that is the command's.
     - name: Boot + run (Linux/macOS)
-      id: boot
       if: runner.os != 'Windows'
-      continue-on-error: true
-      uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
-      with:
-        api-level: ${{ inputs.api-level }}
-        arch: x86_64
-        target: aosp_atd
-        force-avd-creation: false
-        emulator-options: >-
-          ${{ inputs.cold-boot == 'true' && '-no-snapshot' || '-no-snapshot-save' }}
-          -no-window -noaudio -no-boot-anim
-        emulator-boot-timeout: 600
-        disable-animations: true
-        script: /tmp/emulator-run.sh '${{ inputs.script }}'
-
-    # The marker says whether the command ran. If it did, its failure is the
-    # job's; if not, the emulator failed to come up and boots once more.
-    - name: Did the command start (Linux/macOS)
-      id: started
-      if: runner.os != 'Windows' && steps.boot.outcome == 'failure'
       shell: bash
-      run: |
-        if [ -f /tmp/emulator-script-started ]; then started=true; else started=false; fi
-        echo "started=$started" >> "$GITHUB_OUTPUT"
-        echo "the first boot failed; the command had started: $started"
-    - name: Fail with the command (Linux/macOS)
-      if: steps.started.outputs.started == 'true'
-      shell: bash
-      run: |
-        echo "::error::the command run on the emulator failed; its output is above"
-        exit 1
-    - name: Boot + run, second boot (Linux/macOS)
-      if: steps.started.outputs.started == 'false'
-      uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
-      with:
-        api-level: ${{ inputs.api-level }}
-        arch: x86_64
-        target: aosp_atd
-        force-avd-creation: false
-        emulator-options: >-
-          ${{ inputs.cold-boot == 'true' && '-no-snapshot' || '-no-snapshot-save' }}
-          -no-window -noaudio -no-boot-anim
-        emulator-boot-timeout: 600
-        disable-animations: true
-        script: /tmp/emulator-run.sh '${{ inputs.script }}'
+      env:
+        API: ${{ inputs.api-level }}
+        SNAP_FLAG: ${{ inputs.cold-boot == 'true' && '-no-snapshot' || '-no-snapshot-save' }}
+        INPUTS_SCRIPT: ${{ inputs.script }}
+      run: bash "$GITHUB_ACTION_PATH/emulator.sh" run "$INPUTS_SCRIPT"
 
     # ── Windows: mirrors reactivecircus action 1:1 ──
     # The action doesn't support Windows, so we replicate its exact
@@ -618,7 +559,7 @@ runs:
         phase: save
         save: ${{ inputs.avd-cache-save }}
         name: avd
-        key: ${{ runner.os }}-${{ runner.arch }}-${{ inputs.api-level }}-emu${{ steps.emu-ver.outputs.version }}-img${{ steps.emu-ver.outputs.image }}
+        key: ${{ runner.os }}-${{ runner.arch }}-${{ inputs.api-level }}-emu${{ steps.emu-ver.outputs.version }}-img${{ steps.emu-ver.outputs.image }}-settled
         path: |
           ~/.android/avd/*
           ~/.android/adb*
@@ -637,7 +578,7 @@ runs:
         path: |
           ~/.android/avd/*
           ~/.android/adb*
-        key: avd-${{ runner.os }}-${{ runner.arch }}-${{ inputs.api-level }}-emu${{ steps.emu-ver.outputs.version }}-img${{ steps.emu-ver.outputs.image }}
+        key: avd-${{ runner.os }}-${{ runner.arch }}-${{ inputs.api-level }}-emu${{ steps.emu-ver.outputs.version }}-img${{ steps.emu-ver.outputs.image }}-settled
 
     # ── SDK components save (ghcr) ──
     # After the emulator is down: everything the run installed is on disk.
