@@ -4,6 +4,14 @@ Releases are cut from the top heading here by `self-release.yml`; consumers pin
 an exact version and upgrade through grouped Dependabot PRs. Versioning rules
 live in the README. Newest first.
 
+## 2.7.19
+
+- `ios-simulator`: futureware-tech/simulator-action v6 (Node 24); `java`:
+  actions/setup-java 6.2.0; `debug-ssh`: actions/upload-artifact 7.0.2.
+- `chrome`: Chrome 158.0.8127.88; `oci-cache`: oras 1.4.0, whose behavior
+  changes (`blob fetch`/`blob delete` by digest, untagged `push --format
+  json`) touch nothing the cache runs.
+
 ## 2.7.18
 
 - `android-emulator`: on Linux and macOS the emulator boots through the
