@@ -142,6 +142,11 @@ case "$cmd" in
     prepare || { echo "::error::the emulator rejected input or settings after settling"; stop; exit 1; }
     bash /tmp/emulator-run.sh "$2"
     status=$?
+    if ! alive; then
+      echo "::error::the emulator process exited while the command ran; its last output:"
+      tail -80 /tmp/emulator-stdout.log
+      dmesg 2>/dev/null | tail -20 || true
+    fi
     stop
     exit "$status"
     ;;
